@@ -25,7 +25,6 @@ const conceptRepo = {
         question : the question for the concetpt
         answer : the answer for the question
         tags : a list of tags to allow quick sorting for the tags based on topcis, dificulty etc.
-        kownNum : the number of times a concept has been answered correctly in a row
         */
     createConcept: async ({ boardId, question, answer, tags }) => {
         const conceptId = crypto.randomUUID();
@@ -40,7 +39,7 @@ const conceptRepo = {
                     question,
                     answer,
                     tags,
-                    knownNum: 0,
+                    knownNum: 0,    // number of times a concept has been answered correctly in a row
                 },
             })
         );
@@ -231,4 +230,8 @@ const conceptRepo = {
         );
         return true;
     }
+}
+
+module.exports = {
+    conceptRepo,
 }

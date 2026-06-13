@@ -3,9 +3,9 @@ const keys = {
     user: (userId) => `USER#${userId}`,
     board: (boardId) => `BOARD#${boardId}`,
     
-    log: (logId) => `LOG#${logId}`,
+    log: (createdAt,logId) => `LOG#${logId}`,
     concept: (conceptId) => `CONCEPT#${conceptId}`,
-    studySession: (studySessionId) => `STUDYSESSION#${studySessionId}`,
+    studySession: (createdAt, studySessionId) => `STUDYSESSION#${studySessionId}`,
     tag: (tagId) => `TAG#${tagId}`, 
 };
 
