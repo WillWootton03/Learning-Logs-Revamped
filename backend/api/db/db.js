@@ -1,6 +1,7 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
 
+// connect to AWS Dynamo DB instance 
 const client = new DynamoDBClient({
     region: process.env.AWS_REGION,
     credentials: {

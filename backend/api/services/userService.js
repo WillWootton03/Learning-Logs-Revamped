@@ -1,7 +1,9 @@
 const { userRepo } = require("../repositories/userRepo.js");
+const { jwt } = require('jsonwebtoken');
 
 const argon2 = require("argon2");
 const crypto = require("crypto");
+const { lookupService } = require("dns");
 
 
 const userService = {
@@ -54,10 +56,20 @@ const userService = {
             throw new Error("Invalid Login Credentials");
         }
 
-        // destructure user and remove passwordHash from what is returned
-        const { passwordHash, ...safeUser } = user;
+        const token = jwt.sign(
+            {
+                userId: lookup.userId,
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "7d",
+            }
+        );
 
-        return safeUser;
+        return {
+            userId: lookup.userId,
+            token
+        };
     }
 }
 
