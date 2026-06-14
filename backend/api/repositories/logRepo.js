@@ -5,15 +5,13 @@ const { keys } =  require("../db/keys.js");
 const TABLE = 'LL-AppData';
 
 const logRepo = {
-    // POST : create a new log
+    // CREATE : create a new log
     /*
-        boardId : where the log lives
-        text : text inside the log 
+        boardId (UUID) : where the log lives
+        logId (UUID) : reference to the log
+        text (string) : what the main text of the log is
     */
-    createLog: async ({ boardId, text }) => {
-
-        // unique ID for the log
-        const logId = crypto.randomUUID();
+    createLog: async ({ boardId, logId, text }) => {
 
         const result = await db.send(
             new PutCommand({
@@ -21,6 +19,7 @@ const logRepo = {
                 Item: {
                     PK: keys.board(boardId),
                     SK: keys.log(logId),  
+                    type: "LOG",
                     text,
                     createdAt : Date.now().toISOString()        // allows for sorting based on time created, ISO is a readable form
                 },
@@ -29,10 +28,10 @@ const logRepo = {
         return result.Item ?? null;
     },
 
-    // GET : get a log based on id
+    // READ : get a log based on id
     /*
-        boardId : where the log lives
-        logId : reference to the log
+        boardId (UUID) : where the log lives
+        logId (UUID) : reference to the log
     */
     getLog: async ({ boardId, logId }) => {
         const result = await db.send(
@@ -47,12 +46,12 @@ const logRepo = {
         return result.Item ?? null;
     },
 
-    // PUT : edit a log's text and update createdAt
+    // UPDATE : edit a log's text and update createdAt
     /*
-        boardId : where the log lives
-        logId : reference to the log
+        boardId (UUID) : where the log lives
+        logId (UUID) : reference to the log
 
-        text : updated log text
+        text (string) : updated log text
     */
     updateLog: async ({ boardId, logId, text }) => {
         const result = await db.send(
@@ -79,8 +78,8 @@ const logRepo = {
 
     // DELETE : delete a log
     /*
-        boardId : where the log lives
-        logId : reference to the log
+        boardId (UUID) : where the log lives
+        logId (UUID) : reference to the log
     */
     deleteLog: async ({ boardId, logId }) => {
         await db.send(

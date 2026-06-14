@@ -1,4 +1,4 @@
-const { PutCommand, QueryCommand } =  require("@aws-sdk/lib-dynamodb");
+const { PutCommand, QueryCommand, GetCommand, DeleteCommand } =  require("@aws-sdk/lib-dynamodb");
 const { db } =  require("../db/db.js");
 const { keys } =  require("../db/keys.js");
 
@@ -6,7 +6,7 @@ const TABLE = "LL-AppData";
 
 const boardRepo = {
     // POST :  a board given a userId, boardId, and name for the board and adds it to the AppData table
-    createBoard: async ({ userId, boardId, name }) => {
+    createBoard: async ( userId, boardId, name ) => {
         return db.send(
             new PutCommand({
                 TableName: TABLE,
@@ -18,6 +18,7 @@ const boardRepo = {
                 },
             })
         );
+        return result.Item ?? null;
     },
 
     // GET : all boards for a user based on a userId
@@ -39,6 +40,7 @@ const boardRepo = {
     // GET : a single board for user based on userId, and boardId
     // RETURN : a found board or null
     getBoard : async (userId, boardId) => {
+        console.log(userId, boardId);
         const result = await db.send(
             new GetCommand({
                 TableName: TABLE,

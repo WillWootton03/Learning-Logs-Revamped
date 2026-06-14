@@ -20,14 +20,15 @@ const conceptRepo = {
     * 
     */
 
-    // POST : add a new concept to a board 
+    // CREATE : add a new concept to a board 
     /* 
-        question : the question for the concetpt
-        answer : the answer for the question
-        tags : a list of tags to allow quick sorting for the tags based on topcis, dificulty etc.
-        */
-    createConcept: async ({ boardId, question, answer, tags }) => {
-        const conceptId = crypto.randomUUID();
+        boardId (UUID) : where the concept lives 
+        conceptId (UUID) : reference to the concept 
+        question (string) : the question for the concetpt
+        answer (string) : the answer for the question
+        tags [(string)] : a list of tags to allow quick sorting for the tags based on topcis, dificulty etc.
+    */
+    createConcept: async ({ boardId, conceptId, question, answer, tags }) => {
 
         const result = await db.send(
             new PutCommand({
@@ -46,10 +47,10 @@ const conceptRepo = {
         return result.Item ?? null;
     },
 
-    // GET : get a concept based on conceptId
+    // READ : get a concept based on conceptId
     /*
-        boardId : the board where the concept lives
-        conceptId: the concept to get
+        boardId (UUID) : the board where the concept lives
+        conceptId (UUID) : the concept to get
     */
     getConcept: async ({boardId, conceptId}) => {
         const result = await db.send(
@@ -64,15 +65,15 @@ const conceptRepo = {
         return result.Item;
     },
 
-    // PUT : edit a concept based on values given 
+    // UPDATE : edit a concept based on values given 
     /*
-        boardId: used for getting the concept
-        conceptId : used for getting the concept
+        boardId (UUID) : used for getting the concept
+        conceptId (UUID) : used for getting the concept
 
     if no value is given for the following, then no update happens
-        question : updated string for question or undefined
-        answer : updated string for answer or undefined
-        tags : includes all tags for new concept, can remove or add entire array gets updated 
+        question (string) : updated string for question or undefined
+        answer (string) : updated string for answer or undefined
+        tags [(string)] : includes all tags for new concept, can remove or add entire array gets updated 
     */
     updateConcept: async ({ boardId, conceptId, question, answer, tags })  => {
         
@@ -118,8 +119,8 @@ const conceptRepo = {
 
     // DELETE : deletes a concept 
     /*
-        boardId: where the concept lives
-        conceptId: reference to concept
+        boardId (UUID) : where the concept lives
+        conceptId (UUID) : reference to concept
     */
     deleteConcept: async ({ boardId, conceptId }) => {
         await db.send(
@@ -145,14 +146,13 @@ const conceptRepo = {
     * 
     */
 
-    // POST : add a new tag to a board
+    // CREATE : add a new tag to a board
     /* 
-        boardId: the board where the tag will live
-        tagTitle: identifier for the tag EX. Hard, Easy, Word, Greek History, German History, etc.
+        boardId (UUID) : the board where the tag will live
+        tagId (UUID) : reference to the created tag
+        tagTitle (string) : identifier for the tag EX. Hard, Easy, Word, Greek History, German History, etc.
     */
-    createTag: async ({ boardId, tagTitle }) => {
-        const tagId = crypto.randomUUID();
-
+    createTag: async ({ boardId, tagId, tagTitle }) => {
         const result = await db.send(
             new PutCommand({
                 TableName: TABLE,
@@ -167,10 +167,10 @@ const conceptRepo = {
         return result.Item ?? null;
     },
 
-    // GET : get a tag based on tagId
+    // READ : get a tag based on tagId
     /*
-        boardId : where the tag lives
-        tagId : actual tag
+        boardId (UUID) : where the tag lives
+        tagId (UUID) : actual tag
     */
     getTag : async ({ boardId, tagId }) => {
         const result = await db.send(
@@ -185,11 +185,11 @@ const conceptRepo = {
         return result.Item;
     },
 
-    // PUT : update a tag 
+    // UPDATE : update a tag 
     /*
-        boardId : where the tag lives
-        tagId : reference to the tag
-        title : definition of tag
+        boardId (UUID) : where the tag lives
+        tagId (UUID) : reference to the tag
+        title (string) : definition of tag
     */
     updateTag: async ({ boardId, tagId, title }) => {
         const result = await db.send(
@@ -214,8 +214,8 @@ const conceptRepo = {
 
     // DELETE : delete a tag given tagId
     /*
-        boardId : where the tag lives
-        tagId : reference to the specific tag
+        boardId (UUID) : where the tag lives
+        tagId (UUID) : reference to the specific tag
     */
     deleteTag: async ({ boardId, tagId }) => {
         await db.send(

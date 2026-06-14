@@ -13,7 +13,7 @@ const createUserController = async (req, res) => {
             });
     } catch (e) {
         res 
-            .status(401)
+            .status(400)
             .json({
                 success: false,
                 error: e.message
@@ -21,19 +21,19 @@ const createUserController = async (req, res) => {
     }
 };
 
-const getUserController = async (req, res) => {
+const getUserByIdController = async (req, res) => {
     try {
-        const result = await userService.getUser(req.params.userId);
+        const result = await userService.getUserByEmail(req.params.userId);
 
         res
-            .status(201)
+            .status(200)
             .json({
                 sucess: true,
                 data: result,
             });
     } catch (e) {
         res
-            .status(401)
+            .status(400)
             .json({
                 sucess: false,
                 error: e.message
@@ -41,19 +41,43 @@ const getUserController = async (req, res) => {
     }
 };
 
-const emailLoginController = async (req, res) => {
+// DEBUG TESTING ONLY
+const getUserByEmailController = async (req, res) => {
     try {
-        const result = await userService.emailLogin(req.body);
+
+        const result = await userService.getUserByEmail(req.query.email);
 
         res
-            .status(201)
+            .status(200)
             .json({
                 success: true,
                 data: result,
             });
     } catch (e) {
         res
-            .status(401)
+            .status(400)
+            .json({
+                sucess:false,
+                error: e.message,
+            });
+    }
+};
+
+const emailLoginController = async (req, res) => {
+    const { email, password} = req.body;
+
+    try {
+        const result = await userService.emailLogin(email, password);
+
+        res
+            .status(200)
+            .json({
+                success: true,
+                data: result,
+            });
+    } catch (e) {
+        res
+            .status(400)
             .json({
                 success: false,
                 error: e.message,
@@ -63,6 +87,7 @@ const emailLoginController = async (req, res) => {
 
 module.exports = {
     createUserController,
-    getUserController,
+    getUserByIdController,
     emailLoginController,
+    getUserByEmailController,
 }

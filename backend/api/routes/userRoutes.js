@@ -1,4 +1,4 @@
-const { createUserController, getUserController, emailLoginController } = require("../controllers/userController.js");
+const { createUserController, getUserByIdController, getUserByEmailController, emailLoginController } = require("../controllers/userController.js");
 const express = require('express');
 
 const router = express.Router();
@@ -6,6 +6,7 @@ const router = express.Router();
 router
     .post("/", createUserController)
     .post('/login', emailLoginController)
-    .get("/:userId", getUserController);
+    .get("/:userId", getUserByIdController)
+    .get("/", getUserByEmailController);
 
 module.exports = router;

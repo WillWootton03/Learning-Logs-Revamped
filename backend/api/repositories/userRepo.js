@@ -1,4 +1,4 @@
-const { GetCommand, PutCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { GetCommand, PutCommand, QueryCommand, UpdateCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 const { TransactWriteCommand } = require( "@aws-sdk/lib-dynamodb");
 const { db } = require( "../db/db.js");
 const { keys } =  require("../db/keys.js");
@@ -6,7 +6,13 @@ const { keys } =  require("../db/keys.js");
 const TABLE = "LL-AppData";
 
 const userRepo = {
-    // CREATE a new User and create an email item using TransactWriteCommand to allow O(1) db lookup by email
+    // CREATE : creates a new user entry 
+    /*
+        userId (UUID) : reference to the user
+        name (string) : the name for the profile
+        email (string) : email to contact the user or sign in
+        passwordHash (string) : hashed version of users plaintext password
+    */
     createUser: async ({ userId, name, email, passwordHash }) => {
         return db.send(
             new TransactWriteCommand({
@@ -16,7 +22,7 @@ const userRepo = {
                         Put: {
                             TableName: TABLE,
                             Item: {
-                                PK: `USER#${userId}`,
+                                PK: keys.user(userId),
                                 SK: "PROFILE",
                                 email,
                                 name,
@@ -44,13 +50,15 @@ const userRepo = {
     },
 
     // READ : a user based on userId 
-    // RETURN : user item or null
+    /* 
+        userId (UUID) : reference to the user
+    */
     getUserById: async ( userId ) => {
         return db.send(
             new GetCommand({
                 TableName : TABLE,
                 Key: {
-                    PK: `USER#${userId}`,
+                    PK: keys.user(userId),
                     SK: "PROFILE",
                 },
             })
@@ -59,18 +67,89 @@ const userRepo = {
     },
 
     // READ : a user based on email
-    // RETURN : userId or null
+    /*
+        email (string) : what the users email is
+    */
     getUserByEmail : async (email) => {
         const result = await db.send(
             new GetCommand({
                 TableName: TABLE,
                 Key: {
-                    PK: `EMAIL#${email}`,
+                    PK: `EMAIL#${email.toLowerCase()}`,
                     SK: "USER",
                 },
             })
         );
         return result.Item ?? null;     // returns found userId or null 
+    },
+
+    // UPDATE : update some value for the user by userId
+    /*
+        userId (UUID) : reference to the user
+
+    if no value is given for the following, then no update happens    
+        email (string) : updated email for the users account
+        name (string) : updated users name
+        passwordHash (string) : updated hashed value for the users password
+    */
+    updateUser : async({ userId, email, name, passwordHash }) => {
+        const updates = [];
+        const names = {};
+        const values = {};
+
+        // checks if email was updated adds to command
+        if (email !== undefined) {
+            updates.push("#email = :email");
+            names["#email"] = "email";
+            values[":email"] = email;
+        }
+
+        // checks if name was updated adds to command
+        if (name !== undefined) {
+            updates.push("#name = :name");
+            names["#name"] = "name";
+            values[":name"] = name;
+        }
+
+        // checks if passwordHash was updated adds to command
+        if (passwordHash !== undefined) {
+            updates.push("#passwordHash = :passwordHash");
+            names["#passwordHash"] = "passwordHash";
+            values[":passwordHash"] = passwordHash;
+        }
+
+        const result = await db.send(
+            new UpdateCommand({
+                TableName: TABLE,
+                Key: {
+                    PK: keys.user(userId),
+                    SK: "PROFILE",
+                },
+                UpdateExpression: `SET ${updates.join(", ")}`,
+                ExpressionAttributeNames: names,
+                ExpressionAttributeValues: values,
+                ReturnValues: "ALL_NEW",
+            })
+        );
+        return result.Attributes;
+    },
+
+    // DELETE : delete a user from the database based on userId
+    /*
+        userId (UUID) : reference to the user to delete
+    */
+    deleteUser: async ({ userId }) => {
+        await db.send(
+            new DeleteCommand({
+                TableName: TABLE,
+                Key: {
+                    PK: keys.user(userId),
+                    SK: "PROFILE"
+                },
+                ConditionExpression: "attribute_exists(PK) AND attribute_exists(SK)",
+            })
+        );
+        return true;
     },
 }
 
