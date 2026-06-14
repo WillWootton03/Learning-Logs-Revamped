@@ -47,18 +47,19 @@ const userService = {
         ()-> userId (UUID) : the id for the user after being signed in
         ()-> token (Token) : a JWT token for validation valid for 7 days
     */
-    emailLogin : async ( email, password ) => {
+    emailLogin : async ({ email, password }) => {
 
         // get userId from email
-        const lookup = await userRepo.getUserByEmail(email);
+        const lookup = await userRepo.getUserByEmail({ email });
 
         // verify if user with that email in DB
         if (!lookup) {
             throw new Error("Invalid Login Credentials");
         }
         
+        const lookupUserId = lookup.userId;
         // if userId found get user
-        const user = await userRepo.getUserById(lookup.userId);
+        const user = await userRepo.getUserById({ lookupUserId });
 
         // verify user found
         if(!user){
@@ -77,7 +78,7 @@ const userService = {
 
         const token = jwt.sign(
             {
-                userId: lookup.userId,
+                userId: lookupUserId,
             },
             process.env.JWT_SECRET,
             {
@@ -86,7 +87,7 @@ const userService = {
         );
 
         return {
-            userId: lookup.userId,
+            userId: lookupUserId,
             token
         };
     },
@@ -107,10 +108,8 @@ const userService = {
 
         ()-> user (record) : returns the object for a user
     */
-    getUserById : async (userId) => {
-        return userRepo.getUser({
-            userId
-        });
+    getUserById : async ({ userId }) => {
+        return userRepo.getUserById({ userId });
     },
 
     // GET : return a user based on email
@@ -119,8 +118,8 @@ const userService = {
 
         ()-> userId (UUID) : returns the data for a userId
     */
-    getUserByEmail: async (email) => {
-        return userRepo.getUserByEmail(email);
+    getUserByEmail: async ({ email }) => {
+        return userRepo.getUserByEmail({ email });
     },
 
 /*
@@ -149,14 +148,16 @@ const userService = {
         // create new hashed password if in params
         if (plaintextPassword !== undefined){
             const passwordHash = await argon2.hash(plaintextPassword);
+        } else {
+            const passwordHash = null;
         }
 
-        return userRepo.updateUser(
+        return userRepo.updateUser({
             userId,
             email,
             name,
-            passwordHash ?? undefined,      // needs verification in case no plaintextPassword is not given
-        );
+            passwordHash,      // needs verification in case no plaintextPassword is not given
+        });
     },
 
 /*
@@ -176,9 +177,9 @@ const userService = {
         ()-> success (bool) : returns true if user record deleted
     */
     deleteUser: async ({ userId }) => {
-        return userRepo.deleteUser(
+        return userRepo.deleteUser({
             userId,
-        );
+        });
     },
 
 }

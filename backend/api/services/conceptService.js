@@ -27,7 +27,7 @@ const conceptService = {
 
         ()-> concept (Record) : returns the instance of the new concept
     */
-    createConcept: async ({ boardId, question, answer, tags}) => {
+    createConcept: async ({ boardId, question, answer, tags }) => {
         const conceptId = crypto.randomUUID();
 
         return conceptRepo.createConcept({
@@ -37,24 +37,6 @@ const conceptService = {
             answer,
             tags,
         });
-    },
-
-    // POST : add a new tag to a board
-    /* 
-        boardId (UUID) : the board where the tag will live
-        tagId (UUID) : reference to the created tag
-        tagTitle (string) : identifier for the tag EX. Hard, Easy, Word, Greek History, German History, etc.
-
-        ()-> tag (Record) : returns a record of the new tag
-    */
-    createTag: async ({ boardId, tagTitle }) => {
-        const tagId = crypto.randomUUID();
-
-        return conceptRepo.createTag(
-            boardId,
-            tagId,
-            tagTitle,
-        );
     },
 
 /*
@@ -75,25 +57,12 @@ const conceptService = {
         ()-> concept (Record) : the found concept or null / undefined
     */
     getConcept: async ({ boardId, conceptId }) => {
-        return conceptRepo.getConcept(
+        return conceptRepo.getConcept({
             boardId,
             conceptId
-        );
+        });
     },
 
-    // GET : get a tag based on tagId
-    /*
-        boardId (UUID) : where the tag lives
-        tagId (UUID) : actual tag
-
-        ()-> tag (Record) : returns the found tag or null / undefined
-    */
-    getTag: async ({ boardId, tagId }) => {
-        return conceptRepo.getTag(
-            boardId,
-            tagId,
-        );
-    },
 
 /*
 *
@@ -116,14 +85,15 @@ const conceptService = {
 
         ()-> concept (Record) : returns an instance of the updated concept
     */
-    updateConcept: async ({ boardId, conceptId, question, answer, tags }) => {
-        return conceptRepo.updateConcept(
+    updateConcept: async ({ boardId, conceptId, question, answer, tags, knownNum }) => {
+        return conceptRepo.updateConcept({
             boardId,
             conceptId,
             question,
             answer,
             tags,
-        );
+            knownNum,
+        });
     },
 
 /*
@@ -144,10 +114,10 @@ const conceptService = {
         ()-> success (boolean) : returns true if record deleted 
     */
     deleteConcept: async ({ boardId, conceptId }) => {
-        return conceptRepo.deleteConcept(
+        return conceptRepo.deleteConcept({
             boardId,
             conceptId,
-        );
+        });
     },
 
 }

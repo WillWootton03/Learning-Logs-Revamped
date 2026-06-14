@@ -1,93 +1,134 @@
 const { userService } = require("../services/userService.js");
 
-const createUserController = async (req, res) => {
-    
-    try {
-        const result = await userService.createUser(req.body);
+const userController = {
 
-        res
-            .status(201)
-            .json({
-                success: true,
-                data: result,
-            });
-    } catch (e) {
-        res 
-            .status(400)
-            .json({
-                success: false,
-                error: e.message
-            });
-    }
-};
+/*
+*
+*
+*
+* POST METHODS 
+* 
+* 
+* 
+*/
 
-const getUserByIdController = async (req, res) => {
-    try {
-        const result = await userService.getUserByEmail(req.params.userId);
+    createUser: async (req, res) => {
+        try {
+            const { email, name, password } = req.body;
+            const result = await userService.createUser(email, name, password);
 
-        res
-            .status(200)
-            .json({
-                sucess: true,
-                data: result,
-            });
-    } catch (e) {
-        res
-            .status(400)
-            .json({
-                sucess: false,
-                error: e.message
-            });
-    }
-};
+            res
+                .status(201)
+                .json({
+                    success: true,
+                    data: result,
+                });
+        } catch (e) {
+            res 
+                .status(400)
+                .json({
+                    success: false,
+                    error: e.message
+                });
+        }
+    },
 
-// DEBUG TESTING ONLY
-const getUserByEmailController = async (req, res) => {
-    try {
+/*
+*
+*
+*
+* GET METHODS 
+* 
+* 
+* 
+*/
 
-        const result = await userService.getUserByEmail(req.query.email);
+    getUserById: async (req, res) => {
+        try {
+            const userId = req.params.userId;
+            const result = await userService.getUserByEmail({ userId });
 
-        res
-            .status(200)
-            .json({
-                success: true,
-                data: result,
-            });
-    } catch (e) {
-        res
-            .status(400)
-            .json({
-                sucess:false,
-                error: e.message,
-            });
-    }
-};
+            res
+                .status(200)
+                .json({
+                    sucess: true,
+                    data: result,
+                });
+        } catch (e) {
+            res
+                .status(400)
+                .json({
+                    sucess: false,
+                    error: e.message
+                });
+        }
+    },
 
-const emailLoginController = async (req, res) => {
-    const { email, password} = req.body;
+    // DEBUG TESTING ONLY
+    getUserByEmail: async (req, res) => {
+        try {
+            const email = req.params.email;
+            const result = await userService.getUserByEmail({ email });
 
-    try {
-        const result = await userService.emailLogin(email, password);
+            res
+                .status(200)
+                .json({
+                    success: true,
+                    data: result,
+                });
+        } catch (e) {
+            res
+                .status(400)
+                .json({
+                    sucess:false,
+                    error: e.message,
+                });
+        }
+    },
 
-        res
-            .status(200)
-            .json({
-                success: true,
-                data: result,
-            });
-    } catch (e) {
-        res
-            .status(400)
-            .json({
-                success: false,
-                error: e.message,
-            });
-    }
-};
+    emailLogin: async (req, res) => {
+        try {
+            const { email, password} = req.body;
+            const result = await userService.emailLogin({ email, password });
+
+            res
+                .status(200)
+                .json({
+                    success: true,
+                    data: result,
+                });
+        } catch (e) {
+            res
+                .status(400)
+                .json({
+                    success: false,
+                    error: e.message,
+                });
+        }
+    },
+
+/*
+*
+*
+*
+* PUT METHODS 
+* 
+* 
+* 
+*/
+
+/*
+*
+*
+*
+* DELETE METHODS 
+* 
+* 
+* 
+*/
+
+}
 
 module.exports = {
-    createUserController,
-    getUserByIdController,
-    emailLoginController,
-    getUserByEmailController,
+    userController,
 }

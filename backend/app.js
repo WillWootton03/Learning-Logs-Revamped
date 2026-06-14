@@ -7,6 +7,10 @@ require("dotenv").config();
 
 var boardRouter = require('./api/routes/boardRoutes');
 var usersRouter = require('./api/routes/userRoutes');
+var tagRouter = require('./api/routes/tagRoutes');
+var conceptRouter = require('./api/routes/conceptRoutes');
+var logRouter = require('./api/routes/logRoutes');
+var sessionRouter = require('./api/routes/sessionRoutes');
 
 var app = express();
 
@@ -29,6 +33,11 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api/users', usersRouter);
 app.use('/api/boards', boardRouter);
+//app.use('/api/:boardId/sessions', sessionRouter);
+//app.use('/api/:boardId/concepts', conceptRouter);
+//app.use('/api/:boardId/logs', logRouter);
+//app.use('/api/:boardId/tags', tagRouter);
+
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

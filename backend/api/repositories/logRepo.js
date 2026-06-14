@@ -21,11 +21,11 @@ const logRepo = {
                     SK: keys.log(logId),  
                     type: "LOG",
                     text,
-                    createdAt : Date.now().toISOString()        // allows for sorting based on time created, ISO is a readable form
+                    createdAt : Date.now()
                 },
             })
         );
-        return result.Item ?? null;
+        return logId;
     },
 
     // READ : get a log based on id
@@ -61,14 +61,14 @@ const logRepo = {
                     PK: keys.board(boardId),
                     SK: keys.log(logId),
                 },
-                UpdateExpression: `SET #text = text, createdAt = :createdAt`,
+                UpdateExpression: `SET #text = :t, #createdAt = :createdAt`,
                 ExpressionAttributeNames: {
-                    "#text" : "text",
-                    "#createdAt" : "createdAt",
+                    "#text": "text",
+                    "#createdAt": "createdAt",
                 },
-                ExpressionAttributeValues : {
-                    ":text" : text,
-                    ":createdAt" : Date.now().toISOString(),
+                ExpressionAttributeValues: {
+                    ":t": text,
+                    ":createdAt": Date.now(),
                 },
                 ReturnValues: "ALL_NEW",
             })
@@ -82,17 +82,24 @@ const logRepo = {
         logId (UUID) : reference to the log
     */
     deleteLog: async ({ boardId, logId }) => {
-        await db.send(
-            new DeleteCommand({
-                TableName: TABLE,
-                Key: {
-                    PK: keys.board(boardId),
-                    SK: keys.log(logId),
-                },
-                ConditionExpression : "attribute_exists(PK) AND attribute_exists(SK)",
-            })
-        );
-        return true;
+        try {
+            await db.send(
+                new DeleteCommand({
+                    TableName: TABLE,
+                    Key: {
+                        PK: keys.board(boardId),
+                        SK: keys.log(logId),
+                    },
+                    ConditionExpression : "attribute_exists(PK) AND attribute_exists(SK)",
+                })
+            );
+            return true;
+        } catch (e) {
+            if (e.name === "ConditionalCheckFailedException") {
+                return null;
+            }
+            throw e;
+        }
     },
 }
 

@@ -7,7 +7,7 @@ const TABLE = 'LL-AppData';
 
 const deleteConditionExists = "attribute_exists(PK) AND attribute_exists(SK)";
 
-const sessionRepo = {
+const tagRepo = {
 
 /*
 *
@@ -19,27 +19,25 @@ const sessionRepo = {
 * 
 */
 
-    // CREATE : add a new session to a board
+    // CREATE : add a new tag to a board
     /* 
-        boardId (UUID) : the board where the session will live
-        sessionId (UUID) : reference to the created session
-        questions [(Question)] : the list of questions that occured during the session
+        boardId (UUID) : the board where the tag will live
+        tagId (UUID) : reference to the created tag
+        title (string) : identifier for the tag EX. Hard, Easy, Word, Greek History, German History, etc.
     */
-    createSession: async ({ boardId, sessionId, questions }) => {
-        console.log(sessionId);
+    createTag: async ({ boardId, tagId, title }) => {
         const result = await db.send(
             new PutCommand({
                 TableName: TABLE,
                 Item: {
                     PK: keys.board(boardId),
-                    SK: keys.session(sessionId),
-                    type: 'SESSION',
-                    questions,
-                    createdAt: Date.now(),
+                    SK: keys.tag(tagId),
+                    type: 'TAG',
+                    title,
                 },
             })
         );
-        return sessionId;
+        return tagId;
     },
 
 /*
@@ -52,41 +50,40 @@ const sessionRepo = {
 * 
 */
 
-    // GET : get a session based on sessionId
+    // GET : get a tag based on tagId
     /*
-        boardId (UUID) : where the session lives
-        sessionId (UUID) : actual session
+        boardId (UUID) : where the tag lives
+        tagId (UUID) : actual tag
 
-        ()-> session (Session) : returns a single session item or null
+        ()-> tag (Tag) : returns a single tag item or null
     */
-    getSingleSession : async ({ boardId, sessionId }) => {
-        console.log(boardId, sessionId);
+    getSingleTag : async ({ boardId, tagId }) => {
         const result = await db.send(
             new GetCommand({
                 TableName: TABLE,
                 Key: {
                     PK: keys.board(boardId),
-                    SK: keys.session(sessionId),
+                    SK: keys.tag(tagId),
                 },
             })
         );
         return result.Item ?? null;
     },
 
-    // GET : get all sessions for a board
+    // GET : get all tags for a board
     /*
-        boardId (UUID) : board to get all sessions for
+        boardId (UUID) : board to get all tags for
 
-        ()-> sessions [(Session)] : returns a list of all session objects in a board
+        ()-> tags [(Tag)] : returns a list of all tag objects in a board
     */
-    getBoardSessions: async ({ boardId }) => {
+    getAllTags: async ({ boardId }) => {
         const result = await db.send(
             new QueryCommand({
                 TableName: TABLE,
                 KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
                 ExpressionAttributeValues: {
                     ":pk" : keys.board(boardId),
-                    ":sk" : "SESSION#"
+                    ":sk" : "TAG#"
                 }
             })
         );
@@ -103,26 +100,26 @@ const sessionRepo = {
 * 
 */
 
-    // UPDATE : update a session 
+    // UPDATE : update a tag 
     /*
-        boardId (UUID) : where the session lives
-        sessionId (UUID) : reference to the session
-        questions [(Question)] : list of all answered questions
+        boardId (UUID) : where the tag lives
+        tagId (UUID) : reference to the tag
+        title (string) : definition of tag
     */
-    updateSession: async ({ boardId, sessionId, questions }) => {
+    updateTag: async ({ boardId, tagId, title }) => {
         const result = await db.send(
             new UpdateCommand({
                 TableName: TABLE,
                 Key: {
                     PK: keys.board(boardId),
-                    SK: keys.session(sessionId),
+                    SK: keys.tag(tagId),
                 },
-                UpdateExpression: "SET #questions = :questions",
+                UpdateExpression: "SET #title = :title",
                 ExpressionAttributeNames : {
-                    "#questions" : "questions",
+                    "#title" : "title",
                 },
                 ExpressionAttributeValues : {
-                    ":questions" : questions,
+                    ":title" : title,
                 },
                 ReturnValues: "ALL_NEW",
             })
@@ -140,19 +137,19 @@ const sessionRepo = {
 * 
 */
 
-    // DELETE : delete a session given sessionId
+    // DELETE : delete a tag given tagId
     /*
-        boardId (UUID) : where the session lives
-        sessionId (UUID) : reference to the specific session
+        boardId (UUID) : where the tag lives
+        tagId (UUID) : reference to the specific tag
     */
-    deleteSession: async ({ boardId, sessionId }) => {
+    deleteTag: async ({ boardId, tagId }) => {
         try {
             await db.send(
                 new DeleteCommand({
                     TableName: TABLE,
                     Key: {
                         PK: keys.board(boardId),
-                        SK: keys.session(sessionId),
+                        SK: keys.tag(tagId),
                     },
                     ConditionExpression : deleteConditionExists,
                 })
@@ -161,12 +158,12 @@ const sessionRepo = {
         } catch (e) {
             if (e.name === "ConditionalCheckFailedException") {
                 return null;
-            }
+                }
             throw e;
         }
     }
 }
 
 module.exports = {
-    sessionRepo,
+    tagRepo,
 }

@@ -6,7 +6,18 @@ const { keys } =  require("../db/keys.js");
 const TABLE = "LL-AppData";
 
 const userRepo = {
-    // CREATE : creates a new user entry 
+
+/*
+*
+*
+*
+* POST METHODS 
+* 
+* 
+* 
+*/
+
+    // POST : creates a new user entry 
     /*
         userId (UUID) : reference to the user
         name (string) : the name for the profile
@@ -14,7 +25,7 @@ const userRepo = {
         passwordHash (string) : hashed version of users plaintext password
     */
     createUser: async ({ userId, name, email, passwordHash }) => {
-        return db.send(
+        return await db.send(
             new TransactWriteCommand({
                 TransactItems: [
                     {
@@ -49,12 +60,22 @@ const userRepo = {
         );
     },
 
-    // READ : a user based on userId 
+/*
+*
+*
+*
+* GET METHODS 
+* 
+* 
+* 
+*/
+
+    // GET : a user based on userId 
     /* 
         userId (UUID) : reference to the user
     */
-    getUserById: async ( userId ) => {
-        return db.send(
+    getUserById: async ({ userId }) => {
+        return await db.send(
             new GetCommand({
                 TableName : TABLE,
                 Key: {
@@ -66,11 +87,11 @@ const userRepo = {
         return result.Item ?? null;   
     },
 
-    // READ : a user based on email
+    // GET : a user based on email
     /*
         email (string) : what the users email is
     */
-    getUserByEmail : async (email) => {
+    getUserByEmail : async ({ email }) => {
         const result = await db.send(
             new GetCommand({
                 TableName: TABLE,
@@ -83,7 +104,17 @@ const userRepo = {
         return result.Item ?? null;     // returns found userId or null 
     },
 
-    // UPDATE : update some value for the user by userId
+/*
+*
+*
+*
+* PUT METHODS 
+* 
+* 
+* 
+*/
+
+    // PUT : update some value for the user by userId
     /*
         userId (UUID) : reference to the user
 
@@ -133,6 +164,16 @@ const userRepo = {
         );
         return result.Attributes;
     },
+
+/*
+*
+*
+*
+* DELETE METHODS 
+* 
+* 
+* 
+*/
 
     // DELETE : delete a user from the database based on userId
     /*

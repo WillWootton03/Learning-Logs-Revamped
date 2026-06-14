@@ -1,6 +1,6 @@
-const { sessionService } = require('../services/sessionService.js');
+const { tagService } = require('../services/tagService.js');
 
-const sessionController = {
+const tagController = {
 /*
 *
 *
@@ -11,12 +11,12 @@ const sessionController = {
 * 
 */
 
-    createSession: async (req, res) => {
+    createTag: async (req, res) => {
         try {
             const { boardId } = req.params;
-            const { questions } = req.body;
+            const { title } = req.body;
 
-            const result = await sessionService.createSession({ boardId, questions });
+            const result = await tagService.createTag({ boardId, title });
 
             res
                 .status(201)
@@ -44,11 +44,11 @@ const sessionController = {
 * 
 */
 
-    getSingleSession: async (req, res) => {
+    getSingleTag: async (req, res) => {
         try{
-            const { boardId, sessionId } = req.params;
+            const { boardId, tagId } = req.params;
 
-            const result = await sessionService.getSingleSession({ boardId, sessionId });
+            const result = await tagService.getSingleTag({ boardId, tagId });
 
             res
                 .status(201)
@@ -66,11 +66,11 @@ const sessionController = {
         }
     },
 
-    getBoardSessions: async (req, res) => {
+    getAllTags: async (req, res) => {
         try {
             const { boardId } = req.params;
 
-            const result = await sessionService.getBoardSessions({ boardId });
+            const result = await tagService.getAllTags({ boardId });
 
             res
                 .status(201)
@@ -98,12 +98,12 @@ const sessionController = {
 * 
 */
 
-    updateSession: async (req, res) => {
+    updateTag: async (req, res) => {
         try {
-            const { boardId, sessionId } = req.params;
-            const { questions } = req.body;
+            const { boardId, tagId } = req.params;
+            const { title } = req.body;
 
-            const result = await sessionService.updateSession({ boardId, sessionId, questions });
+            const result = await tagService.updateTag({ boardId, tagId, title });
 
             res
                 .status(201)
@@ -131,11 +131,11 @@ const sessionController = {
 * 
 */
 
-    deleteSession: async (req, res) => {
+    deleteTag: async (req, res) => {
         try {
-            const { boardId, sessionId } = req.params;
+            const { boardId, tagId } = req.params;
 
-            const result = await sessionService.deleteSession({ boardId, sessionId });
+            const result = await tagService.deleteTag({ boardId, tagId });
 
             res
                 .status(201)
@@ -156,5 +156,5 @@ const sessionController = {
 };
 
 module.exports = {
-    sessionController,
+    tagController,
 }
