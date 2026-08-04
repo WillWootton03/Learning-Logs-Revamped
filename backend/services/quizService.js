@@ -180,40 +180,22 @@ async function generateQuestions(userId, boardId, { style, tagIds, includeKnown 
 }
 
 /**
- * Record a completed quiz run: score every answer server-side, persist the
+ * Persist a validated quiz run: score every answer server-side, insert the
  * run + per-question results in a transaction, and bump mastery for correct
- * concepts. Returns the run summary and per-question results.
+ * concepts. Shared by recordRun and recordRunFromSettings so neither has to
+ * re-validate what the other already did.
  * @param {string} userId
  * @param {string} boardId
  * @param {{
- *   quizSettingsId?: string|null,
+ *   quizSettingsId: string|null,
  *   style: string,
- *   tagIds?: string[],
- *   includeKnown?: boolean,
  *   timeElapsedMs: number,
  *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>
  * }} data
  * @returns {Promise<{run: object, results: Array<object>}>}
- * @throws {AppError} 400 on invalid input / unknown concepts.
+ * @throws {AppError} 400 on unknown concepts.
  */
-async function recordRun(userId, boardId, { quizSettingsId = null, style, timeElapsedMs, answers }) {
-  if (!validateStyle(style)) {
-    throw new AppError(400, `style must be one of: ${QUIZ_STYLES.join(', ')}`);
-  }
-  if (!Number.isInteger(timeElapsedMs) || timeElapsedMs < 0) {
-    throw new AppError(400, 'timeElapsedMs must be a non-negative integer');
-  }
-  if (!Array.isArray(answers) || answers.length === 0) {
-    throw new AppError(400, 'answers must be a non-empty array');
-  }
-  if (quizSettingsId !== null && !isUuid(quizSettingsId)) {
-    throw new AppError(400, 'quizSettingsId must be a valid UUID');
-  }
-  if (quizSettingsId !== null) {
-    const setting = await quizSettingsRepository.findById(userId, boardId, quizSettingsId);
-    if (!setting) throw new AppError(404, 'Quiz settings not found');
-  }
-
+async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers }) {
   const conceptIds = answers.map((a) => a.conceptId);
   for (const id of conceptIds) {
     if (!isUuid(id)) {
@@ -243,8 +225,42 @@ async function recordRun(userId, boardId, { quizSettingsId = null, style, timeEl
 }
 
 /**
- * Record a quiz run from a saved setting: the setting supplies style, tag
- * filter, and include_known, and the run is linked to it.
+ * Record a completed one-off quiz run: validate the request, then persist.
+ * @param {string} userId
+ * @param {string} boardId
+ * @param {{
+ *   quizSettingsId?: string|null,
+ *   style: string,
+ *   timeElapsedMs: number,
+ *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>
+ * }} data
+ * @returns {Promise<{run: object, results: Array<object>}>}
+ * @throws {AppError} 400 on invalid input, 404 if settings missing.
+ */
+async function recordRun(userId, boardId, { quizSettingsId = null, style, timeElapsedMs, answers }) {
+  if (!validateStyle(style)) {
+    throw new AppError(400, `style must be one of: ${QUIZ_STYLES.join(', ')}`);
+  }
+  if (!Number.isInteger(timeElapsedMs) || timeElapsedMs < 0) {
+    throw new AppError(400, 'timeElapsedMs must be a non-negative integer');
+  }
+  if (!Array.isArray(answers) || answers.length === 0) {
+    throw new AppError(400, 'answers must be a non-empty array');
+  }
+  if (quizSettingsId !== null && !isUuid(quizSettingsId)) {
+    throw new AppError(400, 'quizSettingsId must be a valid UUID');
+  }
+  if (quizSettingsId !== null) {
+    const setting = await quizSettingsRepository.findById(userId, boardId, quizSettingsId);
+    if (!setting) throw new AppError(404, 'Quiz settings not found');
+  }
+  return persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers });
+}
+
+/**
+ * Record a quiz run from a saved setting: the setting supplies the style and
+ * the run is linked to it. The setting is fetched here once and reused, so
+ * persistRun does not re-validate it.
  * @param {string} userId
  * @param {string} boardId
  * @param {string} quizSettingsId
@@ -255,12 +271,9 @@ async function recordRun(userId, boardId, { quizSettingsId = null, style, timeEl
 async function recordRunFromSettings(userId, boardId, quizSettingsId, { timeElapsedMs, answers }) {
   const setting = await quizSettingsRepository.findById(userId, boardId, quizSettingsId);
   if (!setting) throw new AppError(404, 'Quiz settings not found');
-  const tagIds = await quizSettingsRepository.findTagIds(userId, boardId, quizSettingsId);
-  return recordRun(userId, boardId, {
+  return persistRun(userId, boardId, {
     quizSettingsId,
     style: setting.style,
-    tagIds,
-    includeKnown: setting.include_known,
     timeElapsedMs,
     answers,
   });

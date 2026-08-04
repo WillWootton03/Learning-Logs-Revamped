@@ -6,8 +6,7 @@ var authenticate = require('../middleware/authenticate');
 router.use(authenticate);
 
 router.get('/me', userController.me);
-router.get('/:id', userController.getById);
-router.put('/:id', userController.update);
-router.delete('/:id', userController.remove);
+router.put('/me', userController.update);
+router.delete('/me', userController.remove);
 
 module.exports = router;

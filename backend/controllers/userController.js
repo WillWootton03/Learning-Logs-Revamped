@@ -4,7 +4,8 @@ const asyncHandler = require('../middleware/asyncHandler');
 
 /**
  * GET /users/me — return the currently authenticated user (from req.userId,
- * set by the authenticate middleware).
+ * set by the authenticate middleware). This is the only user endpoint; a user
+ * can only ever see or act on their own account.
  */
 async function me(req, res) {
   const user = await userService.getById(req.userId);
@@ -12,17 +13,7 @@ async function me(req, res) {
 }
 
 /**
- * GET /users/:id — return the authenticated user. The id in the URL is
- * ignored; user records are only ever accessible as the logged-in user.
- */
-async function getById(req, res) {
-  const user = await userService.getById(req.userId);
-  return res.status(200).json(user);
-}
-
-/**
- * PUT /users/:id — update the authenticated user's email and/or password.
- * The id in the URL is ignored; a user can only update their own account.
+ * PUT /users/me — update the authenticated user's email and/or password.
  * The password is hashed here before it ever reaches the service layer.
  */
 async function update(req, res) {
@@ -39,8 +30,7 @@ async function update(req, res) {
 }
 
 /**
- * DELETE /users/:id — delete the authenticated user's account. The id in the
- * URL is ignored; a user can only delete their own account.
+ * DELETE /users/me — delete the authenticated user's account.
  */
 async function remove(req, res) {
   const result = await userService.remove(req.userId);
@@ -49,7 +39,6 @@ async function remove(req, res) {
 
 module.exports = {
   me: asyncHandler(me),
-  getById: asyncHandler(getById),
   update: asyncHandler(update),
   remove: asyncHandler(remove),
 };
