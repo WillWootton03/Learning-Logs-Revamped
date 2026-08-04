@@ -49,7 +49,7 @@ async function getById(userId, boardId) {
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid name or threshold.
  */
-async function create({ userId, name, masteryThreshold = 3 }) {
+async function create({ userId, name, masteryThreshold = 20 }) {
   if (!validateName(name)) {
     throw new AppError(400, `Board name is required (max ${MAX_NAME_LENGTH} characters)`);
   }

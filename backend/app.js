@@ -9,6 +9,7 @@ var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var authRouter = require('./routes/auth');
 var boardsRouter = require('./routes/boards');
+var logsRouter = require('./routes/logs');
 
 var app = express();
 
@@ -22,6 +23,7 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/auth', authRouter);
 app.use('/boards', boardsRouter);
+app.use('/boards/:boardId/logs', logsRouter);
 
 app.use(function (err, req, res, next) {
   var status = err.status || 500;

@@ -15,3 +15,12 @@ CREATE TABLE IF NOT EXISTS boards (
   mastery_threshold INT NOT NULL DEFAULT 20,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS logs (
+  log_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id   UUID NOT NULL REFERENCES boards(board_id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  content    TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
