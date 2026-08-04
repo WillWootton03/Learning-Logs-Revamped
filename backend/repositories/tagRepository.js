@@ -20,6 +20,8 @@ async function findAllByBoard(userId, boardId) {
 
 /**
  * Fetch one tag, verifying it belongs to the user's board via JOIN.
+ * Detail queries return the full row — but tags has no updated_at and
+ * created_at is never returned, so the detail row has no timestamp.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string} tagId - Tag id (UUID).
@@ -27,13 +29,35 @@ async function findAllByBoard(userId, boardId) {
  */
 async function findById(userId, boardId, tagId) {
   const result = await pool.query(
-    `SELECT t.tag_id, t.name 
+    `SELECT t.tag_id, t.board_id, t.name
      FROM tags t
      JOIN boards b ON b.board_id = t.board_id
      WHERE t.tag_id = $1 AND t.board_id = $2 AND b.user_id = $3`,
     [tagId, boardId, userId]
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Fetch many tags by id in one query, verifying they all belong to the user's
+ * board. Only owned tags are returned, so the caller can detect any foreign
+ * or fake ids by comparing lengths. Used to validate tag filters in one round
+ * trip instead of one query per tag.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @param {string[]} tagIds - Tag ids (UUIDs) to look up.
+ * @returns {Promise<Array<object>>} Tag rows belonging to the board.
+ */
+async function findByIds(userId, boardId, tagIds) {
+  if (tagIds.length === 0) return [];
+  const result = await pool.query(
+    `SELECT t.tag_id, t.name
+     FROM tags t
+     JOIN boards b ON b.board_id = t.board_id
+     WHERE t.tag_id = ANY($1::uuid[]) AND t.board_id = $2 AND b.user_id = $3`,
+    [tagIds, boardId, userId]
+  );
+  return result.rows;
 }
 
 /**
@@ -176,7 +200,7 @@ async function unlinkConcept(userId, boardId, conceptId, tagId) {
  */
 async function findByConcept(userId, boardId, conceptId) {
   const result = await pool.query(
-    `SELECT t.tag_id, t.name,
+    `SELECT t.tag_id, t.name
      FROM concept_tags ct
      JOIN tags t ON t.tag_id = ct.tag_id
      JOIN concepts c ON c.concept_id = ct.concept_id
@@ -191,6 +215,7 @@ async function findByConcept(userId, boardId, conceptId) {
 module.exports = {
   findAllByBoard,
   findById,
+  findByIds,
   findByName,
   create,
   update,

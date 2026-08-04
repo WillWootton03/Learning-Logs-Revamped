@@ -1,7 +1,5 @@
 const pool = require('../db/pool');
 
-const COLUMNS = ['user_id', 'email', 'password_hash', 'google_id', 'created_at'];
-
 /**
  * Look up a user by email. Used by password login and duplicate checks.
  * Includes password_hash so the caller can verify credentials.

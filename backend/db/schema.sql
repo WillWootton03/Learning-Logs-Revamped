@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS quiz_settings (
 );
 
 -- Optional tag filter for a saved quiz definition.
+-- If no tags are specified, all concepts are included.
 CREATE TABLE IF NOT EXISTS quiz_settings_tags (
   quiz_settings_id UUID NOT NULL REFERENCES quiz_settings(quiz_settings_id) ON DELETE CASCADE,
   tag_id           UUID NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
@@ -69,8 +70,11 @@ CREATE TABLE IF NOT EXISTS quiz_settings_tags (
 );
 
 -- An actual quiz attempt/run. quiz_settings_id is NULL for one-off quizzes.
+-- board_id is stored directly on the run so one-off quizzes (which have no
+-- quiz_settings) are still board-scoped and listable.
 CREATE TABLE IF NOT EXISTS quiz (
   quiz_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id         UUID NOT NULL REFERENCES boards(board_id) ON DELETE CASCADE,
   quiz_settings_id UUID REFERENCES quiz_settings(quiz_settings_id) ON DELETE SET NULL,
   questions_count  INT NOT NULL,
   time_elapsed_ms  BIGINT NOT NULL,
@@ -78,11 +82,14 @@ CREATE TABLE IF NOT EXISTS quiz (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Per-question results within a quiz run.
+-- Per-question results within a quiz run. position preserves the order the
+-- questions were asked in, so a breakdown can reproduce the original quiz.
+-- position used for ordering the questions in the quiz run.
 CREATE TABLE IF NOT EXISTS quiz_questions (
   quiz_question_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   quiz_id            UUID NOT NULL REFERENCES quiz(quiz_id) ON DELETE CASCADE,
   concept_id         UUID NOT NULL REFERENCES concepts(concept_id) ON DELETE CASCADE,
+  position           INT NOT NULL,
   answered_correctly BOOLEAN NOT NULL
 );
 
@@ -98,6 +105,9 @@ CREATE INDEX IF NOT EXISTS idx_concept_tags_tag_id ON concept_tags (tag_id);
 
 CREATE INDEX IF NOT EXISTS idx_quiz_settings_board_id ON quiz_settings (board_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_settings_tags_tag_id ON quiz_settings_tags (tag_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_settings_id ON quiz (quiz_settings_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_board_id ON quiz (board_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_quiz_settings_id ON quiz (quiz_settings_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON quiz_questions (quiz_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_concept_id ON quiz_questions (concept_id);
+
+

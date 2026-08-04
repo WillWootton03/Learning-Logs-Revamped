@@ -15,14 +15,16 @@ async function findAllByUserId(userId) {
 
 /**
  * Fetch one board, verifying the user owns it. Ownership is enforced in SQL
- * (defense in depth beyond route middleware).
+ * (defense in depth beyond route middleware). Detail queries return the full
+ * row — but boards has no updated_at and created_at is never returned, so the
+ * detail row is the summary plus mastery_threshold.
  * @param {string} userId - Owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @returns {Promise<object|null>} Board row or null.
  */
 async function findById(userId, boardId) {
   const result = await pool.query(
-    'SELECT board_id, name, mastery_threshold, created_at FROM boards WHERE board_id = $1 AND user_id = $2',
+    'SELECT board_id, name, mastery_threshold FROM boards WHERE board_id = $1 AND user_id = $2',
     [boardId, userId]
   );
   return result.rows[0] || null;

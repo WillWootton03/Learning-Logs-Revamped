@@ -10,8 +10,7 @@ const pool = require('../db/pool');
  */
 async function findAllByBoard(userId, boardId, tagId) {
   const result = await pool.query(
-    `SELECT DISTINCT c.concept_id, c.board_id, c.prompt, c.answer, c.hint,
-            c.times_answered_correctly, c.created_at, c.updated_at
+    `SELECT DISTINCT c.concept_id, c.prompt, c.answer, c.times_answered_correctly
      FROM concepts c
      JOIN boards b ON b.board_id = c.board_id
      LEFT JOIN concept_tags ct ON ct.concept_id = c.concept_id AND ct.tag_id = $3
@@ -25,6 +24,8 @@ async function findAllByBoard(userId, boardId, tagId) {
 
 /**
  * Fetch one concept, verifying it belongs to the user's board via JOIN.
+ * Detail queries return the full row (including hint and updated_at) —
+ * only get-by-id returns these columns.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string} conceptId - Concept id (UUID).
@@ -33,13 +34,35 @@ async function findAllByBoard(userId, boardId, tagId) {
 async function findById(userId, boardId, conceptId) {
   const result = await pool.query(
     `SELECT c.concept_id, c.board_id, c.prompt, c.answer, c.hint,
-            c.times_answered_correctly, c.created_at, c.updated_at
+            c.times_answered_correctly, c.updated_at
      FROM concepts c
      JOIN boards b ON b.board_id = c.board_id
      WHERE c.concept_id = $1 AND c.board_id = $2 AND b.user_id = $3`,
     [conceptId, boardId, userId]
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Fetch many concepts by id in one query, verifying they all belong to the
+ * user's board. Used by the quiz engine to validate submitted questions and
+ * fetch their answers for scoring.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @param {string[]} conceptIds - Concept ids (UUIDs).
+ * @returns {Promise<Array<object>>} Concept rows (may be fewer than requested
+ *   if some ids don't belong to this board).
+ */
+async function findManyByIds(userId, boardId, conceptIds) {
+  if (conceptIds.length === 0) return [];
+  const result = await pool.query(
+    `SELECT c.concept_id, c.prompt, c.answer, c.times_answered_correctly
+     FROM concepts c
+     JOIN boards b ON b.board_id = c.board_id
+     WHERE c.concept_id = ANY($1::uuid[]) AND c.board_id = $2 AND b.user_id = $3`,
+    [conceptIds, boardId, userId]
+  );
+  return result.rows;
 }
 
 /**
@@ -57,8 +80,7 @@ async function create(userId, boardId, { prompt, answer, hint }) {
      SELECT $1, $2, $3, $4
      FROM boards b
      WHERE b.board_id = $1 AND b.user_id = $5
-     RETURNING concept_id, board_id, prompt, answer, hint,
-               times_answered_correctly, created_at, updated_at`,
+     RETURNING concept_id, prompt, answer, times_answered_correctly`,
     [boardId, prompt, answer, hint, userId]
   );
   return result.rows[0] || null;
@@ -76,33 +98,37 @@ async function create(userId, boardId, { prompt, answer, hint }) {
  * @returns {Promise<object|null>} Updated concept row or null.
  */
 async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
+  // Identity params go first ($1 = conceptId, $2 = boardId, $3 = userId) so
+  // the WHERE clause positions are fixed; mutable fields follow in order.
+  const values = [conceptId, boardId, userId];
   const sets = [];
-  const values = [];
+  let param = 4;
   if (prompt !== undefined) {
-    sets.push(`prompt = $${sets.length + 1}`);
+    sets.push(`prompt = $${param}`);
     values.push(prompt);
+    param += 1;
   }
   if (answer !== undefined) {
-    sets.push(`answer = $${sets.length + 1}`);
+    sets.push(`answer = $${param}`);
     values.push(answer);
+    param += 1;
   }
   if (hint !== undefined) {
-    sets.push(`hint = $${sets.length + 1}`);
+    sets.push(`hint = $${param}`);
     values.push(hint);
+    param += 1;
   }
   if (sets.length === 0) return null;
   sets.push(`updated_at = now()`);
-  values.push(conceptId, boardId, userId);
   const result = await pool.query(
     `UPDATE concepts c
      SET ${sets.join(', ')}
      FROM boards b
-     WHERE c.concept_id = $${values.length - 2}
+     WHERE c.concept_id = $1
        AND c.board_id = b.board_id
-       AND b.board_id = $${values.length - 1}
-       AND b.user_id = $${values.length}
-     RETURNING c.concept_id, c.board_id, c.prompt, c.answer, c.hint,
-               c.times_answered_correctly, c.created_at, c.updated_at`,
+       AND b.board_id = $2
+       AND b.user_id = $3
+     RETURNING c.concept_id, c.prompt, c.answer, c.times_answered_correctly`,
     values
   );
   return result.rows[0] || null;
@@ -132,6 +158,7 @@ async function remove(userId, boardId, conceptId) {
 module.exports = {
   findAllByBoard,
   findById,
+  findManyByIds,
   create,
   update,
   remove,

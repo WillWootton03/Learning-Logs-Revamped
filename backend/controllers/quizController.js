@@ -1,0 +1,87 @@
+const quizService = require('../services/quizService');
+const asyncHandler = require('../middleware/asyncHandler');
+
+/**
+ * POST /boards/:boardId/quizzes/generate — generate questions for a quiz.
+ * Body: { style, tagIds?, includeKnown?, questionCount? }.
+ */
+async function generateQuestions(req, res) {
+  const { style, tagIds, includeKnown, questionCount } = req.body;
+  const questions = await quizService.generateQuestions(req.userId, req.params.boardId, {
+    style,
+    tagIds,
+    includeKnown,
+    questionCount,
+  });
+  return res.status(200).json({ questions });
+}
+
+/**
+ * POST /boards/:boardId/quizzes — record a completed one-off quiz run.
+ * Body: { style, tagIds?, includeKnown?, timeElapsedMs, answers }.
+ */
+async function recordRun(req, res) {
+  const { style, tagIds, includeKnown, timeElapsedMs, answers } = req.body;
+  const result = await quizService.recordRun(req.userId, req.params.boardId, {
+    style,
+    tagIds,
+    includeKnown,
+    timeElapsedMs,
+    answers,
+  });
+  return res.status(201).json(result);
+}
+
+/**
+ * POST /boards/:boardId/quiz-settings/:quizSettingsId/quizzes — record a run
+ * from a saved setting (style/tags/known come from the setting).
+ */
+async function recordRunFromSettings(req, res) {
+  const { timeElapsedMs, answers } = req.body;
+  const result = await quizService.recordRunFromSettings(
+    req.userId,
+    req.params.boardId,
+    req.params.quizSettingsId,
+    { timeElapsedMs, answers }
+  );
+  return res.status(201).json(result);
+}
+
+/**
+ * GET /boards/:boardId/quizzes — list all quiz runs on the board.
+ */
+async function listRuns(req, res) {
+  const runs = await quizService.listRuns(req.userId, req.params.boardId);
+  return res.status(200).json({ runs });
+}
+
+/**
+ * GET /boards/:boardId/quiz-settings/:quizSettingsId/quizzes — list runs
+ * created from one saved setting.
+ */
+async function listRunsBySettings(req, res) {
+  const runs = await quizService.listRunsBySettings(
+    req.userId,
+    req.params.boardId,
+    req.params.quizSettingsId
+  );
+  return res.status(200).json({ runs });
+}
+
+/**
+ * GET /boards/:boardId/quizzes/:quizId — fetch a run with its breakdown.
+ * Also used (via the same controller) under quiz-settings routes.
+ */
+async function getRunBreakdown(req, res) {
+  const result = await quizService.getRunBreakdown(req.userId, req.params.boardId, req.params.quizId);
+  return res.status(200).json(result);
+}
+
+module.exports = {
+  generateQuestions: asyncHandler(generateQuestions),
+  recordRun: asyncHandler(recordRun),
+  recordRunFromSettings: asyncHandler(recordRunFromSettings),
+  listRuns: asyncHandler(listRuns),
+  listRunsBySettings: asyncHandler(listRunsBySettings),
+  getRunBreakdown: asyncHandler(getRunBreakdown),
+};

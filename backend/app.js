@@ -12,6 +12,8 @@ var boardsRouter = require('./routes/boards');
 var logsRouter = require('./routes/logs');
 var conceptsRouter = require('./routes/concepts');
 var tagsRouter = require('./routes/tags');
+var quizSettingsRouter = require('./routes/quiz-settings');
+var quizzesRouter = require('./routes/quizzes');
 
 var app = express();
 
@@ -28,6 +30,8 @@ app.use('/boards', boardsRouter);
 app.use('/boards/:boardId/logs', logsRouter);
 app.use('/boards/:boardId/concepts', conceptsRouter);
 app.use('/boards/:boardId/tags', tagsRouter);
+app.use('/boards/:boardId/quiz-settings', quizSettingsRouter);
+app.use('/boards/:boardId/quizzes', quizzesRouter);
 
 app.use(function (err, req, res, next) {
   var status = err.status || 500;
