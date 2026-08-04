@@ -49,3 +49,55 @@ CREATE TABLE IF NOT EXISTS concept_tags (
   tag_id     UUID NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
   PRIMARY KEY (concept_id, tag_id)
 );
+
+-- Saved quiz definitions (settings only — not a run).
+CREATE TABLE IF NOT EXISTS quiz_settings (
+  quiz_settings_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id         UUID NOT NULL REFERENCES boards(board_id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  style            TEXT NOT NULL CHECK (style IN ('true_false', 'multiple_choice', 'fill_in')),
+  include_known    BOOLEAN NOT NULL DEFAULT false,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Optional tag filter for a saved quiz definition.
+CREATE TABLE IF NOT EXISTS quiz_settings_tags (
+  quiz_settings_id UUID NOT NULL REFERENCES quiz_settings(quiz_settings_id) ON DELETE CASCADE,
+  tag_id           UUID NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
+  PRIMARY KEY (quiz_settings_id, tag_id)
+);
+
+-- An actual quiz attempt/run. quiz_settings_id is NULL for one-off quizzes.
+CREATE TABLE IF NOT EXISTS quiz (
+  quiz_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quiz_settings_id UUID REFERENCES quiz_settings(quiz_settings_id) ON DELETE SET NULL,
+  questions_count  INT NOT NULL,
+  time_elapsed_ms  BIGINT NOT NULL,
+  correct_count    INT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Per-question results within a quiz run.
+CREATE TABLE IF NOT EXISTS quiz_questions (
+  quiz_question_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quiz_id            UUID NOT NULL REFERENCES quiz(quiz_id) ON DELETE CASCADE,
+  concept_id         UUID NOT NULL REFERENCES concepts(concept_id) ON DELETE CASCADE,
+  answered_correctly BOOLEAN NOT NULL
+);
+
+-- Indexes for the FK columns used in every board-scoped query.
+-- (users.email / users.google_id and tags(board_id, name) are already
+--  indexed by their UNIQUE constraints, so no extra indexes are needed.)
+CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards (user_id);
+CREATE INDEX IF NOT EXISTS idx_logs_board_id ON logs (board_id);
+CREATE INDEX IF NOT EXISTS idx_concepts_board_id ON concepts (board_id);
+-- concept_tags PK covers concept_id-first lookups; tag_id needs its own
+-- index for tag-filtered concept lists and quiz tag filtering.
+CREATE INDEX IF NOT EXISTS idx_concept_tags_tag_id ON concept_tags (tag_id);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_settings_board_id ON quiz_settings (board_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_settings_tags_tag_id ON quiz_settings_tags (tag_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_settings_id ON quiz (quiz_settings_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON quiz_questions (quiz_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_concept_id ON quiz_questions (concept_id);
