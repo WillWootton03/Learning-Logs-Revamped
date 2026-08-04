@@ -1,0 +1,20 @@
+{
+  "name": "backend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node ./bin/www",
+    "db:setup": "node db/setup.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "~1.4.4",
+    "debug": "~2.6.9",
+    "dotenv": "^17.4.2",
+    "express": "~4.16.1",
+    "google-auth-library": "^11.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "~1.9.1",
+    "pg": "^8.22.0"
+  }
+}
