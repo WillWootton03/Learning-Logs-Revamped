@@ -24,3 +24,28 @@ CREATE TABLE IF NOT EXISTS logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS concepts (
+  concept_id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id                 UUID NOT NULL REFERENCES boards(board_id) ON DELETE CASCADE,
+  prompt                   TEXT NOT NULL,
+  answer                   TEXT NOT NULL,
+  hint                     TEXT,
+  times_answered_correctly INT NOT NULL DEFAULT 0,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+  tag_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id   UUID NOT NULL REFERENCES boards(board_id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (board_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS concept_tags (
+  concept_id UUID NOT NULL REFERENCES concepts(concept_id) ON DELETE CASCADE,
+  tag_id     UUID NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
+  PRIMARY KEY (concept_id, tag_id)
+);

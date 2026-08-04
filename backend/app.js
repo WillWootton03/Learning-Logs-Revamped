@@ -10,6 +10,8 @@ var usersRouter = require('./routes/users');
 var authRouter = require('./routes/auth');
 var boardsRouter = require('./routes/boards');
 var logsRouter = require('./routes/logs');
+var conceptsRouter = require('./routes/concepts');
+var tagsRouter = require('./routes/tags');
 
 var app = express();
 
@@ -24,6 +26,8 @@ app.use('/users', usersRouter);
 app.use('/auth', authRouter);
 app.use('/boards', boardsRouter);
 app.use('/boards/:boardId/logs', logsRouter);
+app.use('/boards/:boardId/concepts', conceptsRouter);
+app.use('/boards/:boardId/tags', tagsRouter);
 
 app.use(function (err, req, res, next) {
   var status = err.status || 500;
