@@ -4,6 +4,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const {
   REFRESH_COOKIE,
   setAuthCookies,
+  setAccessCookie,
   clearAuthCookies,
 } = require('../utils/cookies');
 
@@ -47,17 +48,27 @@ async function logout(req, res) {
 }
 
 /**
- * POST /auth/refresh — exchange a valid refresh cookie for a fresh pair.
- * Called by the client when the access token has expired (after ~1h).
+ * POST /auth/refresh — exchange a valid refresh cookie for a fresh access
+ * token. Called by the client when the access token has expired (after ~1h).
+ * The refresh token is static: it is issued once at login and is never
+ * rotated, so this route only mints a new access token and leaves the refresh
+ * cookie untouched.
  */
 async function refresh(req, res) {
   const token = req.cookies[REFRESH_COOKIE];
   if (!token) {
     return res.status(401).json({ error: 'Refresh token missing' });
   }
-  const payload = authService.verifyRefreshToken(token);
-  const tokens = authService.signTokens(payload.userId);
-  setAuthCookies(res, tokens);
+  // A malformed or expired refresh token must yield 401 (not a 500), matching
+  // the authenticate middleware's treatment of bad access tokens.
+  let payload;
+  try {
+    payload = authService.verifyRefreshToken(token);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired refresh token' });
+  }
+  const accessToken = authService.signAccessToken(payload.userId);
+  setAccessCookie(res, accessToken);
   return res.status(200).json({ user_id: payload.userId });
 }
 

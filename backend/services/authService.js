@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const userRepository = require('../repositories/userRepository');
 const AppError = require('./AppError');
@@ -33,17 +34,34 @@ function verifyPassword(plaintext, hash) {
 }
 
 /**
+ * Sign a single access token (1h). Used by the refresh route, which mints
+ * only an access token — the long-lived refresh token is static and is never
+ * rotated. Each token carries a unique jwtid so every refresh produces a
+ * genuinely new token string, even within the same second.
+ * @param {string} userId - Database id to embed in the token.
+ * @returns {string} Signed access token.
+ */
+function signAccessToken(userId) {
+  return jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET, {
+    expiresIn: ACCESS_TTL,
+    jwtid: randomUUID(),
+  });
+}
+
+/**
  * Sign both the access (1h) and refresh (30d) JWTs for a user.
+ * Used on first login (register/login/google). The refresh token is issued
+ * exactly once here and is static thereafter; only access tokens get minted
+ * again (by signAccessToken on /auth/refresh).
  * Uses separate secrets so a leaked access token can't mint refresh tokens.
- * @param {number} userId - Database id to embed in both tokens.
+ * @param {string} userId - Database id to embed in both tokens.
  * @returns {{accessToken: string, refreshToken: string}}
  */
 function signTokens(userId) {
-  const accessToken = jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: ACCESS_TTL,
-  });
+  const accessToken = signAccessToken(userId);
   const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: REFRESH_TTL,
+    jwtid: randomUUID(),
   });
   return { accessToken, refreshToken };
 }
@@ -146,6 +164,7 @@ module.exports = {
   hashPassword,
   verifyPassword,
   signTokens,
+  signAccessToken,
   verifyAccessToken,
   verifyRefreshToken,
   getGoogleAuthUrl,

@@ -37,13 +37,23 @@ function refreshCookieOptions() {
 }
 
 /**
- * Write both JWT cookies onto the response.
+ * Write both JWT cookies onto the response (first login: register/login/google).
  * @param {object} res - Express response.
  * @param {{accessToken: string, refreshToken: string}} tokens
  */
 function setAuthCookies(res, { accessToken, refreshToken }) {
   res.cookie(ACCESS_COOKIE, accessToken, accessCookieOptions());
   res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions());
+}
+
+/**
+ * Write only the access token cookie. Used by /auth/refresh, which leaves the
+ * static refresh cookie untouched.
+ * @param {object} res - Express response.
+ * @param {string} accessToken
+ */
+function setAccessCookie(res, accessToken) {
+  res.cookie(ACCESS_COOKIE, accessToken, accessCookieOptions());
 }
 
 /**
@@ -59,5 +69,6 @@ module.exports = {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   setAuthCookies,
+  setAccessCookie,
   clearAuthCookies,
 };
