@@ -1,0 +1,41 @@
+import { createBrowserRouter } from "react-router";
+import { Root } from "./app/pages/Root";
+import { Landing } from "./app/pages/Landing";
+import { Dashboard } from "./app/pages/Dashboard";
+import { BoardDetail } from "./app/pages/BoardDetail";
+import { ConceptDetail } from "./app/pages/ConceptDetail";
+import { AllConcepts } from "./app/pages/AllConcepts";
+import { AllTags } from "./app/pages/AllTags";
+import { Sessions } from "./app/pages/Sessions";
+import { SessionDetail } from "./app/pages/SessionDetail";
+import { Logs } from "./app/pages/Logs";
+import { NewBoard } from "./app/pages/NewBoard";
+import { UserSettings } from "./app/pages/UserSettings";
+import { BoardSettings } from "./app/pages/BoardSettings";
+import { Profile } from "./app/pages/Profile";
+import { Login } from "./app/pages/Login";
+import { Signup } from "./app/pages/Signup";
+
+export const router = createBrowserRouter([
+  { path: "/", Component: Landing },
+  {
+    path: "/app",
+    Component: Root,
+    children: [
+      { index: true, Component: Dashboard },
+      { path: "settings", Component: UserSettings },
+      { path: "profile", Component: Profile },
+      { path: "board/new", Component: NewBoard },
+      { path: "board/:id", Component: BoardDetail },
+      { path: "board/:id/settings", Component: BoardSettings },
+      { path: "board/:id/concepts", Component: AllConcepts },
+      { path: "board/:id/tags", Component: AllTags },
+      { path: "board/:id/sessions", Component: Sessions },
+      { path: "board/:id/sessions/:sessionId", Component: SessionDetail },
+      { path: "board/:id/logs", Component: Logs },
+      { path: "board/:id/concept/:conceptId", Component: ConceptDetail },
+    ],
+  },
+  { path: "/login", Component: Login },
+  { path: "/signup", Component: Signup },
+]);
