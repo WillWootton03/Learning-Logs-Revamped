@@ -16,6 +16,8 @@ export type Board = {
   streakDays: number;
   lastUsed: string;
   color: string;
+  /** Correct-answer count that marks a concept as learned. */
+  masteryThreshold: number;
 };
 
 export type Concept = {

@@ -2,7 +2,7 @@ import { useState, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, Check, Plus } from "lucide-react";
-import { useApp } from "../context/AppContext";
+import { useBoard } from "../context/BoardContext";
 
 const COLORS = [
   "#7c6af7", "#4fb8f0", "#f07c4f", "#4ff0b8",
@@ -17,7 +17,7 @@ const SUBJECTS = [
 
 export function NewBoard() {
   const navigate = useNavigate();
-  const { createBoard } = useApp();
+  const { createBoard } = useBoard();
 
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");

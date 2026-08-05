@@ -14,6 +14,7 @@ async function findAllByUserId(userId) {
        b.name,
        b.subject,
        b.color,
+       b.mastery_threshold,
        (SELECT COUNT(*) FROM concepts c WHERE c.board_id = b.board_id)::int AS concept_count,
        (SELECT COUNT(*) FROM concepts c WHERE c.board_id = b.board_id
           AND c.times_answered_correctly >= b.mastery_threshold)::int AS learned_count,

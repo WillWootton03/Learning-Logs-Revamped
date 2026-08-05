@@ -98,6 +98,56 @@ async function create(userId, boardId, { name }) {
 }
 
 /**
+ * Insert many tags on a board in one statement. Names that already exist on
+ * the board (UNIQUE board_id+name) are skipped, so re-submitting a batch is
+ * idempotent. Ownership is enforced by joining to boards — a foreign board
+ * yields no rows.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @param {string[]} names - Tag names to create.
+ * @returns {Promise<Array<object>>} Created tag rows (existing names excluded).
+ */
+async function createMany(userId, boardId, names) {
+  if (names.length === 0) return [];
+  const result = await pool.query(
+    `INSERT INTO tags (board_id, name)
+     SELECT b.board_id, input.name
+     FROM unnest($2::text[]) AS input(name)
+     JOIN boards b ON b.board_id = $1 AND b.user_id = $3
+     ON CONFLICT (board_id, name) DO NOTHING
+     RETURNING tag_id, name`,
+    [boardId, names, userId]
+  );
+  return result.rows;
+}
+
+/**
+ * Link many tags to a concept in one statement. Only tags on the same,
+ * user-owned board as the concept are linked (verified via joins); links that
+ * already exist are no-ops (composite PK + ON CONFLICT DO NOTHING).
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @param {string} conceptId - Concept id (UUID).
+ * @param {string[]} tagIds - Tag ids (UUIDs) to link.
+ * @returns {Promise<Array<object>>} {concept_id, tag_id} rows actually linked.
+ */
+async function linkMany(userId, boardId, conceptId, tagIds) {
+  if (tagIds.length === 0) return [];
+  const result = await pool.query(
+    `INSERT INTO concept_tags (concept_id, tag_id)
+     SELECT c.concept_id, t.tag_id
+     FROM concepts c
+     JOIN boards b ON b.board_id = c.board_id AND b.user_id = $4
+     JOIN tags t ON t.tag_id = ANY($3::uuid[]) AND t.board_id = $2
+     WHERE c.concept_id = $1 AND c.board_id = $2
+     ON CONFLICT (concept_id, tag_id) DO NOTHING
+     RETURNING concept_id, tag_id`,
+    [conceptId, boardId, tagIds, userId]
+  );
+  return result.rows;
+}
+
+/**
  * Rename a tag, joined through boards so only the owner's tag changes.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
@@ -218,9 +268,11 @@ module.exports = {
   findByIds,
   findByName,
   create,
+  createMany,
   update,
   remove,
   linkConcept,
+  linkMany,
   unlinkConcept,
   findByConcept,
 };

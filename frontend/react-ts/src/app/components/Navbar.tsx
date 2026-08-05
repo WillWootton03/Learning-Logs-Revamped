@@ -5,7 +5,7 @@ import {
   GraduationCap, Plus, Settings, LogOut, User,
   ChevronDown, BookOpen, Tag, Clock, FileText, ChevronRight, SlidersHorizontal,
 } from "lucide-react";
-import { useApp } from "../context/AppContext";
+import { useBoard } from "../context/BoardContext";
 import { useAuth } from "../context/AuthContext";
 import { displayNameFromEmail, initialsFromEmail } from "../lib/userName";
 
@@ -24,7 +24,7 @@ export function Navbar() {
   const boardId = boardMatch?.params?.id;
   const isOnBoard = !!boardId && boardId !== "new";
 
-  const { boards } = useApp();
+  const { boards } = useBoard();
   const currentBoard = isOnBoard ? boards.find((b) => b.id === boardId) : null;
 
   const isAuth = location.pathname === "/login" || location.pathname === "/signup";

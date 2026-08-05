@@ -11,7 +11,7 @@ type BoardRow = {
   name: string;
   subject: string;
   color: string;
-  mastery_threshold?: number;
+  mastery_threshold: number;
   concept_count?: number | null;
   learned_count?: number | null;
   session_count?: number | null;
@@ -36,6 +36,7 @@ function toBoard(row: BoardRow): Board {
     title: row.name,
     subject: row.subject,
     color: row.color,
+    masteryThreshold: row.mastery_threshold,
     conceptCount: row.concept_count ?? 0,
     conceptsLearned: row.learned_count ?? 0,
     sessionCount: row.session_count ?? 0,

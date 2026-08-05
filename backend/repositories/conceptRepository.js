@@ -2,7 +2,9 @@ const pool = require('../db/pool');
 
 /**
  * List all concepts on a board, verifying board ownership via JOIN.
- * Optionally filter to concepts carrying a specific tag.
+ * Optionally filter to concepts carrying a specific tag. Each row carries its
+ * tag names (aggregated, one round trip) so the board page can render tags
+ * without an extra query per concept.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string|null} tagId - Optional tag id (UUID) to filter by, or null.
@@ -10,12 +12,17 @@ const pool = require('../db/pool');
  */
 async function findAllByBoard(userId, boardId, tagId) {
   const result = await pool.query(
-    `SELECT DISTINCT c.concept_id, c.prompt, c.answer, c.times_answered_correctly
+    `SELECT c.concept_id, c.prompt, c.answer, c.times_answered_correctly,
+            COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.tag_id IS NOT NULL), '{}') AS tags
      FROM concepts c
      JOIN boards b ON b.board_id = c.board_id
-     LEFT JOIN concept_tags ct ON ct.concept_id = c.concept_id AND ct.tag_id = $3
+     LEFT JOIN concept_tags ct ON ct.concept_id = c.concept_id
+     LEFT JOIN tags t ON t.tag_id = ct.tag_id
      WHERE c.board_id = $1 AND b.user_id = $2
-       AND ($3::uuid IS NULL OR ct.concept_id IS NOT NULL)
+       AND ($3::uuid IS NULL OR EXISTS (
+         SELECT 1 FROM concept_tags f WHERE f.concept_id = c.concept_id AND f.tag_id = $3
+       ))
+     GROUP BY c.concept_id, c.prompt, c.answer, c.times_answered_correctly
      ORDER BY c.created_at`,
     [boardId, userId, tagId]
   );

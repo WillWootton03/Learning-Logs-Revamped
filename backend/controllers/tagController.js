@@ -19,6 +19,16 @@ async function create(req, res) {
 }
 
 /**
+ * POST /boards/:boardId/tags/bulk — batch-create tags from a list of names.
+ * Names that already exist are skipped; returns the newly created tags.
+ */
+async function createMany(req, res) {
+  const { names } = req.body;
+  const tags = await tagService.createMany(req.userId, req.params.boardId, names);
+  return res.status(201).json({ tags });
+}
+
+/**
  * GET /boards/:boardId/tags/:tagId — fetch one tag.
  */
 async function getById(req, res) {
@@ -57,6 +67,21 @@ async function linkConcept(req, res) {
 }
 
 /**
+ * PUT /boards/:boardId/concepts/:conceptId/tags — batch-link a list of tags
+ * to a concept in one call.
+ */
+async function linkMany(req, res) {
+  const { tagIds } = req.body;
+  const result = await tagService.linkMany(
+    req.userId,
+    req.params.boardId,
+    req.params.conceptId,
+    tagIds
+  );
+  return res.status(200).json(result);
+}
+
+/**
  * DELETE /boards/:boardId/concepts/:conceptId/tags/:tagId — unlink a tag
  * from a concept.
  */
@@ -81,10 +106,12 @@ async function listConceptTags(req, res) {
 module.exports = {
   list: asyncHandler(list),
   create: asyncHandler(create),
+  createMany: asyncHandler(createMany),
   getById: asyncHandler(getById),
   update: asyncHandler(update),
   remove: asyncHandler(remove),
   linkConcept: asyncHandler(linkConcept),
+  linkMany: asyncHandler(linkMany),
   unlinkConcept: asyncHandler(unlinkConcept),
   listConceptTags: asyncHandler(listConceptTags),
 };

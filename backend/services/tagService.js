@@ -69,6 +69,63 @@ async function create(userId, boardId, { name }) {
 }
 
 /**
+ * Batch-create tags on a board. Names are trimmed and de-duplicated; names
+ * that already exist on the board are skipped (idempotent), so the returned
+ * rows are only the newly created tags.
+ * @param {string} userId
+ * @param {string} boardId
+ * @param {*} names - Array of tag name strings.
+ * @returns {Promise<Array<object>>} Newly created tag rows.
+ * @throws {AppError} 400 on a non-array payload or any invalid name.
+ */
+async function createMany(userId, boardId, names) {
+  if (names === undefined || names === null || !Array.isArray(names)) {
+    throw new AppError(400, 'names must be an array of strings');
+  }
+  const unique = [...new Set(names.map((n) => n.trim()).filter((n) => n.length > 0))];
+  if (unique.length === 0) {
+    throw new AppError(400, 'Provide at least one valid tag name');
+  }
+  for (const name of unique) {
+    if (!validateName(name)) {
+      throw new AppError(400, `Tag names must be non-empty strings (max ${MAX_NAME_LENGTH} characters)`);
+    }
+  }
+  return tagRepository.createMany(userId, boardId, unique);
+}
+
+/**
+ * Batch-link tags to a concept. Every id is validated in one query to exist
+ * on the user's board; already-linked pairs are no-ops.
+ * @param {string} userId
+ * @param {string} boardId
+ * @param {string} conceptId
+ * @param {*} tagIds - Array of tag id (UUID) strings.
+ * @returns {Promise<{concept_id: string, tag_ids: string[]}>}
+ * @throws {AppError} 400 on malformed/foreign ids, 404 if concept missing.
+ */
+async function linkMany(userId, boardId, conceptId, tagIds) {
+  if (tagIds === undefined || tagIds === null || !Array.isArray(tagIds)) {
+    throw new AppError(400, 'tagIds must be an array of UUIDs');
+  }
+  const unique = [...new Set(tagIds)];
+  for (const id of unique) {
+    if (!isUuid(id)) {
+      throw new AppError(400, 'tagIds must contain valid UUIDs');
+    }
+  }
+  const concept = await conceptRepository.findById(userId, boardId, conceptId);
+  if (!concept) throw new AppError(404, 'Concept not found');
+  // One batch query verifies every id belongs to this board.
+  const found = await tagRepository.findByIds(userId, boardId, unique);
+  if (found.length !== unique.length) {
+    throw new AppError(400, 'One or more tags do not exist on this board');
+  }
+  await tagRepository.linkMany(userId, boardId, conceptId, unique);
+  return { concept_id: conceptId, tag_ids: unique };
+}
+
+/**
  * Rename a tag.
  * @param {string} userId
  * @param {string} boardId
@@ -174,9 +231,11 @@ module.exports = {
   list,
   getById,
   create,
+  createMany,
   update,
   remove,
   linkConcept,
+  linkMany,
   unlinkConcept,
   listConceptTags,
 };

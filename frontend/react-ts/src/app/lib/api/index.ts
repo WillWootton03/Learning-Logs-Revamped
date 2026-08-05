@@ -9,3 +9,4 @@ export { ApiError, request } from "./client";
 export { register, login, logout, refresh } from "./auth";
 export { getMe, type User } from "./users";
 export { listBoards, createBoard } from "./boards";
+export { listConcepts, createConcept, listTags, createTag, linkTag, createTags, linkTags } from "./concepts";

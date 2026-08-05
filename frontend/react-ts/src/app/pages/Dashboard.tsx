@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { Search, LayoutGrid, Flame, Plus } from "lucide-react";
-import { useApp } from "../context/AppContext";
+import { useBoard } from "../context/BoardContext";
 import { useAuth } from "../context/AuthContext";
 import { displayNameFromEmail } from "../lib/userName";
 import { BoardCard } from "../components/BoardCard";
@@ -21,7 +21,7 @@ export function Dashboard() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const navigate = useNavigate();
-  const { boards, isBoardsLoading, boardsError, reloadBoards } = useApp();
+  const { boards, isBoardsLoading, boardsError, reloadBoards } = useBoard();
   const { user } = useAuth();
 
   const name = displayNameFromEmail(user?.email);
@@ -29,7 +29,7 @@ export function Dashboard() {
   if (isBoardsLoading) {
     return (
       <main className="max-w-7xl mx-auto px-8 py-24 flex flex-col items-center gap-4">
-        <div className="w-10 h-10 rounded-2xl border-2 border-primary/20 border-t-primary animate-spin" />
+        <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
         <p className="text-sm text-muted-foreground font-mono">Loading your boards…</p>
       </main>
     );

@@ -1,5 +1,7 @@
 var express = require('express');
-var router = express.Router();
+// mergeParams keeps :boardId from the /boards/:boardId/quizzes mount path
+// visible inside this router — Express does not merge mount params by default.
+var router = express.Router({ mergeParams: true });
 var quizController = require('../controllers/quizController');
 var authenticate = require('../middleware/authenticate');
 
