@@ -28,34 +28,48 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const boardTags = boardTagPool[boardId] ?? [];
+  // The tag bar doubles as a search field: typing filters the board's tags,
+  // and Enter (or the "create" row) adds whatever is typed as a temporary tag.
+  // Temporary tags only reach the DB when the concept is submitted.
+  const query = tagInput.trim().toLowerCase();
+  const matchingTags = query ? boardTags.filter((t) => t.includes(query)) : boardTags;
+  const canCreateTag = query.length > 0 && !boardTags.some((t) => t === query) && !tags.includes(query);
 
   function addTag(t: string) {
     const trimmed = t.trim().toLowerCase();
     if (trimmed && !tags.includes(trimmed)) setTags((prev) => [...prev, trimmed]);
   }
 
-  function commitTagInput() {
-    addTag(tagInput);
+  /** Toggle a board tag on/off and clear the search text. */
+  function selectTag(tag: string) {
+    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    setTagInput("");
+  }
+
+  /** Add whatever is typed as a brand-new temporary tag. */
+  function createTagFromQuery() {
+    addTag(query);
     setTagInput("");
   }
 
   function handleTagKeyDown(e: KeyboardEvent) {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      commitTagInput();
+      addTag(query);
+      setTagInput("");
     }
     if (e.key === "Backspace" && !tagInput && tags.length) setTags((prev) => prev.slice(0, -1));
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !answer.trim()) return;
     setSubmitError(null);
     setIsSubmitting(true);
     try {
       await createConcept(boardId, {
         prompt: title.trim(),
-        answer: answer.trim() || "—", // backend requires a non-empty answer
+        answer: answer.trim(),
         tags,
       });
       reset();
@@ -149,25 +163,50 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleTagKeyDown}
-                    onBlur={commitTagInput}
-                    placeholder={tags.length === 0 ? "Type a tag and press Enter…" : ""}
+                    placeholder={tags.length === 0 ? "Search tags or type a new one…" : ""}
                     className="flex-1 min-w-30 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />
+                  {tagInput && (
+                    <button
+                      type="button"
+                      onClick={() => setTagInput("")}
+                      aria-label="Clear tag search"
+                      className="shrink-0 self-center text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                {/* board tag suggestions */}
-                {boardTags.length > 0 && (
-                  <div className="flex flex-col gap-1.5">
-                    <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Tags from this board</p>
-                    <div className="h-24 overflow-y-auto flex flex-col gap-1 pr-1">
-                      {boardTags.map((tag) => {
+                {/* all board tags — always visible, ~2 rows of a wrapping
+                    flex where column count adapts to item width. Filtering
+                    only kicks in once the user types. */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+                    {query ? "Matching tags" : "Tags from this board"}
+                  </p>
+                  <div className="h-18 overflow-y-auto rounded-lg border border-border bg-secondary/40 p-1.5 pr-1">
+                    {canCreateTag && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={createTagFromQuery}
+                        className="w-full mb-1.5 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-mono text-left transition-colors bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15"
+                      >
+                        <Plus className="w-3.5 h-3.5 shrink-0" />
+                        Create “{query}”
+                      </button>
+                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {matchingTags.map((tag) => {
                         const selected = tags.includes(tag);
                         return (
                           <button
                             key={tag}
                             type="button"
-                            onClick={() => (selected ? setTags((p) => p.filter((t) => t !== tag)) : addTag(tag))}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => selectTag(tag)}
                             className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-mono text-left transition-colors ${
                               selected
                                 ? "bg-primary/15 text-primary border border-primary/30"
@@ -182,8 +221,11 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
                         );
                       })}
                     </div>
+                    {query && matchingTags.length === 0 && !canCreateTag && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground font-mono">No tags match “{query}”</p>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               {submitError && (
@@ -203,7 +245,7 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
                 </button>
                 <button
                   type="submit"
-                  disabled={!title.trim() || isSubmitting}
+                  disabled={!title.trim() || !answer.trim() || isSubmitting}
                   className="flex-1 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <Plus className="w-3.5 h-3.5" />
