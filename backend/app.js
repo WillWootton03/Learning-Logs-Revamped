@@ -4,6 +4,7 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var cors = require('cors');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -16,6 +17,14 @@ var quizSettingsRouter = require('./routes/quiz-settings');
 var quizzesRouter = require('./routes/quizzes');
 
 var app = express();
+
+// The Vite dev server (localhost:5173) calls this API cross-origin and relies
+// on httpOnly cookies, so credentials must be allowed. Configured origin is
+// overridable via FRONTEND_ORIGIN for other environments (e.g. a deployed SPA).
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+  credentials: true,
+}));
 
 app.use(logger('dev'));
 app.use(express.json());

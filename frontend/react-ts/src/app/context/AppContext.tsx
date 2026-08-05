@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Board, Concept, Log, SessionPreset, SessionRecord } from "../types";
+import { createBoard as apiCreateBoard, listBoards } from "../lib/api";
+import { useAuth } from "./AuthContext";
 
 type AppState = {
   boards: Board[];
@@ -7,7 +9,12 @@ type AppState = {
   sessionPresets: SessionPreset[];
   sessions: SessionRecord[];
   logs: Log[];
-  addBoard: (board: Board) => void;
+  /** True while the initial GET /boards fetch is in flight. */
+  isBoardsLoading: boolean;
+  /** Non-null when the boards fetch failed, so pages can surface a retry. */
+  boardsError: string | null;
+  reloadBoards: () => Promise<void>;
+  createBoard: (input: { title: string; subject: string; color: string }) => Promise<Board>;
   addConcept: (boardId: string, concept: Concept) => void;
   updateConceptTags: (boardId: string, conceptId: string, tags: string[]) => void;
   toggleConceptLearned: (boardId: string, conceptId: string) => void;
@@ -26,18 +33,57 @@ type AppState = {
 const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  // All state starts empty — real data is loaded from the backend API. No
-  // demo/seed data is shipped in the app.
+  const { isAuthenticated } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
+  const [isBoardsLoading, setIsBoardsLoading] = useState(false);
+  const [boardsError, setBoardsError] = useState<string | null>(null);
   const [concepts, setConcepts] = useState<Record<string, Concept[]>>({});
   const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>([]);
   const [sessions] = useState<SessionRecord[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [boardTagPool, setBoardTagPool] = useState<Record<string, string[]>>({});
 
-  function addBoard(board: Board) {
+  // Boards load from the backend once the session is known. On sign-out we
+  // clear them so a different account can't see a previous one's data.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setBoards([]);
+      setBoardsError(null);
+      return;
+    }
+    let cancelled = false;
+    setIsBoardsLoading(true);
+    listBoards()
+      .then((rows) => {
+        if (!cancelled) setBoards(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) setBoardsError(err instanceof Error ? err.message : "Failed to load boards");
+      })
+      .finally(() => {
+        if (!cancelled) setIsBoardsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  async function reloadBoards() {
+    setIsBoardsLoading(true);
+    setBoardsError(null);
+    try {
+      setBoards(await listBoards());
+    } catch (err) {
+      setBoardsError(err instanceof Error ? err.message : "Failed to load boards");
+    } finally {
+      setIsBoardsLoading(false);
+    }
+  }
+
+  async function createBoard(input: { title: string; subject: string; color: string }) {
+    const board = await apiCreateBoard(input);
     setBoards((prev) => [...prev, board]);
-    setConcepts((prev) => ({ ...prev, [board.id]: [] }));
+    return board;
   }
 
   function addConcept(boardId: string, concept: Concept) {
@@ -123,7 +169,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       boards, concepts, sessionPresets, sessions, logs,
-      addBoard, addConcept, updateConceptTags, toggleConceptLearned,
+      isBoardsLoading, boardsError, reloadBoards, createBoard,
+      addConcept, updateConceptTags, toggleConceptLearned,
       addSessionPreset, updateSessionPreset, deleteSessionPreset,
       addLog, updateLog, deleteLog,
       deleteConcept, removeTagFromBoard,

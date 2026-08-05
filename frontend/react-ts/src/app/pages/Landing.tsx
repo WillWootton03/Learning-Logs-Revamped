@@ -4,6 +4,7 @@ import {
   GraduationCap, BookOpen, Tag, RotateCcw, FileText,
   CheckCircle2, BarChart2, Flame, ArrowRight, Zap,
 } from "lucide-react";
+import { GuestOnly } from "../components/GuestOnly";
 
 const FEATURES = [
   {
@@ -55,7 +56,8 @@ export function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
+    <GuestOnly>
+      <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
       {/* nav */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-8 h-[4.5rem] flex items-center justify-between">
@@ -250,6 +252,7 @@ export function Landing() {
           <span>Built for focused learners.</span>
         </div>
       </footer>
-    </div>
+      </div>
+    </GuestOnly>
   );
 }

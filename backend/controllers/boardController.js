@@ -13,8 +13,8 @@ async function list(req, res) {
  * POST /boards — create a board owned by the current user.
  */
 async function create(req, res) {
-  const { name, masteryThreshold } = req.body;
-  const board = await boardService.create({ userId: req.userId, name, masteryThreshold });
+  const { name, masteryThreshold, subject, color } = req.body;
+  const board = await boardService.create({ userId: req.userId, name, masteryThreshold, subject, color });
   return res.status(201).json(board);
 }
 
@@ -27,11 +27,12 @@ async function getById(req, res) {
 }
 
 /**
- * PUT /boards/:boardId — update a board's name and/or mastery threshold.
+ * PUT /boards/:boardId — update a board's name, subject, color, and/or mastery
+ * threshold.
  */
 async function update(req, res) {
-  const { name, masteryThreshold } = req.body;
-  const board = await boardService.update(req.userId, req.params.boardId, { name, masteryThreshold });
+  const { name, masteryThreshold, subject, color } = req.body;
+  const board = await boardService.update(req.userId, req.params.boardId, { name, masteryThreshold, subject, color });
   return res.status(200).json(board);
 }
 

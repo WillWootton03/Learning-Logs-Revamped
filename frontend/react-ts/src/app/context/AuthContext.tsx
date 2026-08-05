@@ -26,21 +26,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore the session on first load: if a valid access cookie exists, the
-  // backend resolves GET /users/me and we're signed in without a re-login.
-  // A 401 (no cookie / expired) just leaves us signed out.
+  // Restore the session on first load. Try GET /users/me first: a valid
+  // access cookie resolves it and we're signed in without a re-login. If the
+  // access token is missing/expired, the backend may still hold a valid
+  // refresh cookie — so attempt refresh(), which mints a fresh access token,
+  // then retry. Only when both fail do we declare the user signed out.
   useEffect(() => {
     let cancelled = false;
-    getMe()
-      .then((me) => {
+    async function restoreSession() {
+      try {
+        const me = await getMe();
         if (!cancelled) setUser(me);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      })
-      .finally(() => {
+      } catch {
+        try {
+          await apiRefresh();
+          const me = await getMe();
+          if (!cancelled) setUser(me);
+        } catch {
+          if (!cancelled) setUser(null);
+        }
+      } finally {
         if (!cancelled) setIsLoading(false);
-      });
+      }
+    }
+    restoreSession();
     return () => {
       cancelled = true;
     };

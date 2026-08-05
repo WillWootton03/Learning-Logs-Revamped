@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
+import { displayNameFromEmail, initialsFromEmail } from "../lib/userName";
 
 export function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -46,11 +47,8 @@ export function Navbar() {
     }`;
   }
 
-  // The API only stores an email, so the navbar name/initials are derived from
-  // its local part: alex@example.com -> "Alex" / "AL".
-  const localPart = user?.email.split("@")[0] ?? "";
-  const displayName = localPart.charAt(0).toUpperCase() + localPart.slice(1);
-  const initials = localPart.slice(0, 2).toUpperCase();
+  const displayName = displayNameFromEmail(user?.email);
+  const initials = initialsFromEmail(user?.email);
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">

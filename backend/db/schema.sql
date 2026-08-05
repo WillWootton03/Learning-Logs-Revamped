@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS boards (
   board_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id           UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   name              TEXT NOT NULL,
+  subject           TEXT NOT NULL DEFAULT 'Other',
+  color             TEXT NOT NULL DEFAULT '#7c6af7',
   mastery_threshold INT NOT NULL DEFAULT 20,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -109,5 +111,11 @@ CREATE INDEX IF NOT EXISTS idx_quiz_board_id ON quiz (board_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_quiz_settings_id ON quiz (quiz_settings_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON quiz_questions (quiz_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_concept_id ON quiz_questions (concept_id);
+
+-- Idempotent migrations for databases created before these columns existed.
+-- CREATE TABLE IF NOT EXISTS never alters an existing table, so existing
+-- deployments pick these up via ADD COLUMN IF NOT EXISTS on re-run.
+ALTER TABLE boards ADD COLUMN IF NOT EXISTS subject TEXT NOT NULL DEFAULT 'Other';
+ALTER TABLE boards ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '#7c6af7';
 
 

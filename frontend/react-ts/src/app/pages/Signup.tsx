@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router";
 import { motion } from "motion/react";
 import { GraduationCap, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { GuestOnly } from "../components/GuestOnly";
 
 export function Signup() {
   const [email, setEmail] = useState("");
@@ -36,7 +37,8 @@ export function Signup() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
+    <GuestOnly>
+      <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -141,6 +143,7 @@ export function Signup() {
           </Link>
         </p>
       </motion.div>
-    </div>
+      </div>
+    </GuestOnly>
   );
 }
