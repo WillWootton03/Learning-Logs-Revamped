@@ -14,7 +14,7 @@ export function AllConcepts() {
   const { concepts, loadConcepts } = useConcepts();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   // Tracks the board whose concepts have finished loading; while it doesn't
   // match the current route the page shows a spinner. Using derived state
@@ -67,11 +67,24 @@ export function AllConcepts() {
 
   const allTags = Array.from(new Set(all.flatMap((c) => c.tags))).sort();
 
+  /** Toggle a tag in/out of the active tag filter set. */
+  function toggleTag(tag: string) {
+    setTagFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
+
   const filtered = all.filter((c) => {
     if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === "learned" && !c.learned) return false;
     if (filter === "unlearned" && c.learned) return false;
-    if (tagFilter && !c.tags.includes(tagFilter)) return false;
+    // A concept must have every selected tag to match.
+    for (const tag of tagFilters) {
+      if (!c.tags.includes(tag)) return false;
+    }
     return true;
   });
 
@@ -84,7 +97,7 @@ export function AllConcepts() {
 
       {/* filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
           <div className="flex items-center gap-1 bg-secondary rounded-lg p-1">
             {(["all", "learned", "unlearned"] as const).map((f) => (
               <button
@@ -98,16 +111,17 @@ export function AllConcepts() {
               </button>
             ))}
           </div>
-          {tagFilter && (
+          {[...tagFilters].sort().map((tag) => (
             <button
-              onClick={() => setTagFilter(null)}
+              key={tag}
+              onClick={() => toggleTag(tag)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary text-xs font-mono border border-primary/30 hover:bg-primary/25 transition-colors"
             >
-              #{tagFilter} ×
+              #{tag} ×
             </button>
-          )}
+          ))}
         </div>
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             type="text"
@@ -127,9 +141,9 @@ export function AllConcepts() {
             {allTags.map((tag) => (
               <button
                 key={tag}
-                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                onClick={() => toggleTag(tag)}
                 className={`text-left px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
-                  tagFilter === tag
+                  tagFilters.has(tag)
                     ? "bg-primary/15 text-primary border border-primary/30"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
@@ -188,10 +202,10 @@ export function AllConcepts() {
                           key={tag}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setTagFilter(tagFilter === tag ? null : tag);
+                            toggleTag(tag);
                           }}
                           className={`text-[10px] px-2 py-0.5 rounded-full font-mono transition-colors ${
-                            tagFilter === tag
+                            tagFilters.has(tag)
                               ? "bg-primary/20 text-primary"
                               : "bg-secondary text-muted-foreground hover:text-foreground"
                           }`}
