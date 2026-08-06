@@ -18,7 +18,7 @@ const app = require('../../app');
 const { truncateAll } = require('./helpers/db');
 const { registerVerifiedUser } = require('./helpers/auth');
 
-const VALID_USER = { email: 'ada@example.com', password: 'password123' };
+const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
 /**
  * Register a verified user and return an agent that carries the auth cookies.
@@ -143,7 +143,7 @@ describe('POST /boards/:boardId/concepts/import', () => {
     const owner = await registerUser();
     const boardId = await createBoard(owner);
     // A different user tries to import into the owner's board.
-    const intruder = await registerUser({ email: 'mal@example.com', password: 'password123' });
+    const intruder = await registerUser({ email: 'mal@example.com', password: 'Password123!' });
 
     const res = await intruder.post(`/boards/${boardId}/concepts/import`).send({
       concepts: [{ prompt: 'Sneaky?', answer: 'no' }],

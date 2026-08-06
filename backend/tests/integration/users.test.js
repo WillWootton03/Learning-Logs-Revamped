@@ -18,7 +18,7 @@ const app = require('../../app');
 const { truncateAll } = require('./helpers/db');
 const { registerVerifiedUser } = require('./helpers/auth');
 
-const VALID_USER = { email: 'ada@example.com', password: 'password123' };
+const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
 /**
  * Pull the value of a named cookie out of a `set-cookie` header array.
@@ -99,7 +99,7 @@ describe('PUT /users/me', () => {
 
   it('rejects with 409 when changing to an email already in use', async () => {
     // First user takes 'other@example.com'; the second tries to steal it.
-    await registerUser({ email: 'other@example.com', password: 'password123' });
+    await registerUser({ email: 'other@example.com', password: 'Password123!' });
     const agent = await registerUser();
 
     const res = await agent.put('/users/me').send({ email: 'other@example.com' });
@@ -112,13 +112,13 @@ describe('PUT /users/me/password', () => {
     const agent = await registerUser();
     await agent
       .put('/users/me/password')
-      .send({ newPassword: 'new-password-123', currentPassword: VALID_USER.password })
+      .send({ newPassword: 'NewPassword123!', currentPassword: VALID_USER.password })
       .expect(200);
 
     // The real bcrypt round-trip: new password authenticates...
     const login = await request(app)
       .post('/auth/login')
-      .send({ email: VALID_USER.email, password: 'new-password-123' });
+      .send({ email: VALID_USER.email, password: 'NewPassword123!' });
     expect(login.status).toBe(200);
 
     // ...and the old password is dead.
@@ -131,7 +131,7 @@ describe('PUT /users/me/password', () => {
   it('rejects a password change without the current password', async () => {
     const agent = await registerUser();
 
-    const res = await agent.put('/users/me/password').send({ newPassword: 'new-password-123' });
+    const res = await agent.put('/users/me/password').send({ newPassword: 'NewPassword123!' });
     expect(res.status).toBe(400);
   });
 
@@ -140,14 +140,14 @@ describe('PUT /users/me/password', () => {
 
     const res = await agent
       .put('/users/me/password')
-      .send({ newPassword: 'new-password-123', currentPassword: 'wrong-current' });
+      .send({ newPassword: 'NewPassword123!', currentPassword: 'wrong-current' });
     expect(res.status).toBe(401);
   });
 
   it('rejects unauthenticated requests with 401', async () => {
     const res = await request(app)
       .put('/users/me/password')
-      .send({ newPassword: 'new-password-123', currentPassword: VALID_USER.password });
+      .send({ newPassword: 'NewPassword123!', currentPassword: VALID_USER.password });
     expect(res.status).toBe(401);
   });
 
@@ -165,7 +165,7 @@ describe('PUT /users/me/password', () => {
     // The first device changes the password.
     await firstDevice
       .put('/users/me/password')
-      .send({ newPassword: 'new-password-123', currentPassword: VALID_USER.password })
+      .send({ newPassword: 'NewPassword123!', currentPassword: VALID_USER.password })
       .expect(200);
 
     // The second device's OLD access token is now stale: 401 PASSWORD_CHANGED
@@ -211,7 +211,7 @@ describe('DELETE /users/me', () => {
 describe('isolation between users', () => {
   it('a second user is fully separated from the first', async () => {
     const userA = await registerUser();
-    await registerUser({ email: 'grace@example.com', password: 'password123' });
+    await registerUser({ email: 'grace@example.com', password: 'Password123!' });
 
     // userA's token still points at userA's account, untouched by the second
     // registration.

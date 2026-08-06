@@ -5,6 +5,7 @@ import { ArrowLeft, Eye, EyeOff, MailCheck, Moon, Save, Sun } from "lucide-react
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { validatePassword } from "../lib/password";
 
 export function UserSettings() {
   const navigate = useNavigate();
@@ -80,6 +81,11 @@ export function UserSettings() {
   async function handleUpdatePassword(e: React.FormEvent) {
     e.preventDefault();
     if (passwordMismatch) return;
+    const strengthError = validatePassword(newPassword);
+    if (strengthError) {
+      setPasswordError(strengthError);
+      return;
+    }
     setPasswordSaving(true);
     setPasswordError(null);
     setPasswordSaved(false);
@@ -241,6 +247,7 @@ export function UserSettings() {
             onChange={setNewPassword}
             show={showNew}
             onToggle={() => setShowNew((v) => !v)}
+            hint={newPassword ? validatePassword(newPassword) : undefined}
           />
           <PasswordField
             label="Confirm new password"
@@ -371,6 +378,7 @@ function PasswordField({
   show,
   onToggle,
   error,
+  hint,
 }: {
   label: string;
   value: string;
@@ -378,6 +386,7 @@ function PasswordField({
   show: boolean;
   onToggle: () => void;
   error?: string;
+  hint?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -402,6 +411,7 @@ function PasswordField({
         </button>
       </div>
       {error && <p className="text-[11px] text-rose-400 font-mono">{error}</p>}
+      {!error && hint && <p className="text-[11px] text-amber-400/90 font-mono">{hint}</p>}
     </div>
   );
 }

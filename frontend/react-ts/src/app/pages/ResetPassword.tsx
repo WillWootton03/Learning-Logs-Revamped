@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { CheckCircle2, Eye, EyeOff, GraduationCap, KeyRound } from "lucide-react";
 import { GuestOnly } from "../components/GuestOnly";
 import { resetPassword } from "../lib/api";
+import { validatePassword } from "../lib/password";
 
 /**
  * Password reset page. The email's reset link arrives as
@@ -24,12 +25,11 @@ export function ResetPassword() {
   const [done, setDone] = useState(false);
 
   const mismatch = Boolean(password) && Boolean(confirmPassword) && password !== confirmPassword;
-  const minLength = 8;
-  const tooShort = password.length > 0 && password.length < minLength;
+  const strengthError = password ? validatePassword(password) : null;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (mismatch || tooShort) return;
+    if (mismatch || strengthError) return;
     setSubmitError(null);
     setIsSubmitting(true);
     try {
@@ -116,7 +116,7 @@ export function ResetPassword() {
                       required
                       autoFocus
                       className={`w-full px-4 py-2.5 pr-10 rounded-lg bg-secondary border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all ${
-                        tooShort ? "border-rose-500/50" : "border-border"
+                        strengthError ? "border-rose-500/50" : "border-border"
                       }`}
                       style={{ fontFamily: "var(--font-sans)" }}
                     />
@@ -128,8 +128,8 @@ export function ResetPassword() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  {tooShort && (
-                    <p className="text-[11px] text-rose-400 font-mono">At least {minLength} characters</p>
+                  {strengthError && (
+                    <p className="text-[11px] text-rose-400 font-mono">{strengthError}</p>
                   )}
                 </div>
 
@@ -161,7 +161,7 @@ export function ResetPassword() {
 
                 <button
                   type="submit"
-                  disabled={!password || !confirmPassword || mismatch || tooShort || isSubmitting}
+                  disabled={!password || !confirmPassword || mismatch || !!strengthError || isSubmitting}
                   className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? "Updating…" : "Update password"}

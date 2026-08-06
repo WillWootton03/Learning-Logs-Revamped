@@ -8,6 +8,31 @@ const AppError = require('./AppError');
 const ACCESS_TTL = '1h';
 const REFRESH_TTL = '30d';
 
+/** Special character = anything that is not a letter or digit. */
+const SPECIAL_CHAR_RE = /[^A-Za-z0-9]/;
+/** Uppercase letter anywhere in the password. */
+const UPPERCASE_RE = /[A-Z]/;
+
+/**
+ * Enforce the app's password policy. Throws a 400 AppError when the password
+ * is too short, has no uppercase letter, or has no special character. Every
+ * password-setting path (register, change-password, reset-password) calls this
+ * before hashing so the same rule applies everywhere.
+ * @param {string} password - Plaintext password to validate.
+ * @returns {void}
+ */
+function validatePasswordStrength(password) {
+  if (typeof password !== 'string' || password.length <= 8) {
+    throw new AppError(400, 'Password must be longer than 8 characters');
+  }
+  if (!UPPERCASE_RE.test(password)) {
+    throw new AppError(400, 'Password must contain at least one capital letter');
+  }
+  if (!SPECIAL_CHAR_RE.test(password)) {
+    throw new AppError(400, 'Password must contain at least one special character');
+  }
+}
+
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -178,6 +203,7 @@ module.exports = {
   REFRESH_TTL,
   hashPassword,
   verifyPassword,
+  validatePasswordStrength,
   signTokens,
   signAccessToken,
   verifyAccessToken,

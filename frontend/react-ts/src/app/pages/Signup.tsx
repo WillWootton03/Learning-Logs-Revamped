@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { GraduationCap, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { GuestOnly } from "../components/GuestOnly";
+import { validatePassword } from "../lib/password";
 
 export function Signup() {
   const [email, setEmail] = useState("");
@@ -20,6 +21,11 @@ export function Signup() {
     e.preventDefault();
     if (password !== confirmPassword) {
       setPasswordError("Passwords do not match");
+      return;
+    }
+    const strengthError = validatePassword(password);
+    if (strengthError) {
+      setPasswordError(strengthError);
       return;
     }
     setPasswordError(null);
@@ -92,6 +98,13 @@ export function Signup() {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {password && (
+              <ul className="flex flex-col gap-0.5">
+                <PasswordRequirement ok={password.length > 8} label="Longer than 8 characters" />
+                <PasswordRequirement ok={/[A-Z]/.test(password)} label="At least one capital letter" />
+                <PasswordRequirement ok={/[^A-Za-z0-9]/.test(password)} label="At least one special character" />
+              </ul>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -148,3 +161,13 @@ export function Signup() {
     </GuestOnly>
   );
 }
+
+function PasswordRequirement({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <li className={`flex items-center gap-1.5 text-[11px] font-mono transition-colors ${ok ? "text-emerald-400" : "text-muted-foreground"}`}>
+      <span className={`inline-block w-1 h-1 rounded-full ${ok ? "bg-emerald-400" : "bg-muted-foreground/50"}`} />
+      {label}
+    </li>
+  );
+}
+

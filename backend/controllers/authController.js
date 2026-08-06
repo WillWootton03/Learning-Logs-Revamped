@@ -23,6 +23,7 @@ async function register(req, res) {
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
+  authService.validatePasswordStrength(password);
   const passwordHash = await authService.hashPassword(password);
   const user = await userService.create({ email, passwordHash, googleId: null });
   // force=true skips the cooldown check so the very first code always goes out.

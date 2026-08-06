@@ -28,7 +28,7 @@ jest.mock('../../services/mailer', () => ({
 }));
 const mailer = require('../../services/mailer');
 
-const VALID_USER = { email: 'ada@example.com', password: 'password123' };
+const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
 /**
  * Pull the value of a named cookie out of a `set-cookie` header array.
@@ -81,7 +81,7 @@ describe('POST /auth/register', () => {
   it('rejects a malformed email with 400', async () => {
     const res = await request(app).post('/auth/register').send({
       email: 'not-an-email',
-      password: 'password123',
+      password: 'Password123!',
     });
     expect(res.status).toBe(400);
   });
@@ -89,6 +89,21 @@ describe('POST /auth/register', () => {
   it('rejects missing credentials with 400', async () => {
     const res = await request(app).post('/auth/register').send({ email: 'ada@example.com' });
     expect(res.status).toBe(400);
+  });
+
+  it('rejects a weak password with 400 and does not create an account', async () => {
+    // No uppercase, no special character.
+    const res = await request(app)
+      .post('/auth/register')
+      .send({ email: 'weak@example.com', password: 'password123' });
+    expect(res.status).toBe(400);
+
+    // The account must not exist: login fails and no verification code went out.
+    expect(mailer.sendVerificationEmail).not.toHaveBeenCalled();
+    const login = await request(app)
+      .post('/auth/login')
+      .send({ email: 'weak@example.com', password: 'password123' });
+    expect(login.status).toBe(401);
   });
 });
 
@@ -156,7 +171,7 @@ describe('POST /auth/login', () => {
   it('rejects an unknown email with 401', async () => {
     const res = await request(app)
       .post('/auth/login')
-      .send({ email: 'ghost@example.com', password: 'password123' });
+      .send({ email: 'ghost@example.com', password: 'Password123!' });
     // Same 401 as a wrong password — the API must not reveal whether an email
     // is registered.
     expect(res.status).toBe(401);

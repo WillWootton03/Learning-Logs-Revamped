@@ -36,6 +36,7 @@ async function changePassword(userId, currentPassword, newPassword) {
   if (!valid) {
     throw new AppError(401, 'Current password is incorrect');
   }
+  authService.validatePasswordStrength(newPassword);
   const passwordHash = await authService.hashPassword(newPassword);
   const updated = await userRepository.updatePassword(userId, passwordHash);
   if (!updated) throw new AppError(404, 'User not found');

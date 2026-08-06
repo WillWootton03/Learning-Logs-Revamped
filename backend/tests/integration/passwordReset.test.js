@@ -28,7 +28,7 @@ jest.mock('../../services/mailer', () => ({
 }));
 const mailer = require('../../services/mailer');
 
-const VALID_USER = { email: 'ada@example.com', password: 'password123' };
+const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
 /** Read the stored reset token for a user directly from the DB. */
 async function storedToken(userId) {
@@ -111,7 +111,7 @@ describe('POST /auth/reset-password', () => {
 
     const res = await request(app)
       .post('/auth/reset-password')
-      .send({ token, password: 'new-password-123' });
+      .send({ token, password: 'NewPassword123!' });
 
     expect(res.status).toBe(200);
 
@@ -127,14 +127,14 @@ describe('POST /auth/reset-password', () => {
     // ...and the new password authenticates.
     const newLogin = await request(app)
       .post('/auth/login')
-      .send({ email: VALID_USER.email, password: 'new-password-123' });
+      .send({ email: VALID_USER.email, password: 'NewPassword123!' });
     expect(newLogin.status).toBe(200);
   });
 
   it('rejects an unknown token with 400', async () => {
     const res = await request(app)
       .post('/auth/reset-password')
-      .send({ token: 'f'.repeat(64), password: 'new-password-123' });
+      .send({ token: 'f'.repeat(64), password: 'NewPassword123!' });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('RESET_TOKEN_INVALID');
   });
@@ -151,7 +151,7 @@ describe('POST /auth/reset-password', () => {
 
     const res = await request(app)
       .post('/auth/reset-password')
-      .send({ token, password: 'new-password-123' });
+      .send({ token, password: 'NewPassword123!' });
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('RESET_TOKEN_EXPIRED');
@@ -179,7 +179,7 @@ describe('POST /auth/reset-password', () => {
 
     await request(app).post('/auth/forgot-password').send({ email: VALID_USER.email });
     const token = await storedToken(user.user_id);
-    await request(app).post('/auth/reset-password').send({ token, password: 'new-password-123' }).expect(200);
+    await request(app).post('/auth/reset-password').send({ token, password: 'NewPassword123!' }).expect(200);
 
     // The session that predates the reset is dead: access token rejected with
     // PASSWORD_CHANGED and the cookies revoked.

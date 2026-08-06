@@ -353,3 +353,28 @@ describe('authService.loginWithGoogle', () => {
     expect(userRepository.findById).toHaveBeenCalledWith('user-3');
   });
 });
+
+describe('authService.validatePasswordStrength', () => {
+  it('accepts a password meeting every requirement', () => {
+    expect(() => authService.validatePasswordStrength('Password123!')).not.toThrow();
+  });
+
+  it('rejects a password that is 8 characters or shorter', () => {
+    // Exactly 8 chars — the policy demands "longer than 8".
+    expect(() => authService.validatePasswordStrength('Pass1!aa')).toThrow(
+      expect.objectContaining({ status: 400, message: 'Password must be longer than 8 characters' })
+    );
+  });
+
+  it('rejects a password without an uppercase letter', () => {
+    expect(() => authService.validatePasswordStrength('password123!')).toThrow(
+      expect.objectContaining({ status: 400, message: 'Password must contain at least one capital letter' })
+    );
+  });
+
+  it('rejects a password without a special character', () => {
+    expect(() => authService.validatePasswordStrength('Password123')).toThrow(
+      expect.objectContaining({ status: 400, message: 'Password must contain at least one special character' })
+    );
+  });
+});

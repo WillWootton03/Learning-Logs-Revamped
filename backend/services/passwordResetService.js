@@ -60,6 +60,7 @@ async function resetPassword(token, newPassword) {
   if (ageMs > RESET_TTL_MS) {
     throw new AppError(400, 'This reset link has expired. Request a new one.', 'RESET_TOKEN_EXPIRED');
   }
+  authService.validatePasswordStrength(newPassword);
   const passwordHash = await authService.hashPassword(newPassword);
   await userRepository.updatePassword(row.user_id, passwordHash);
   await passwordResetRepository.deleteByToken(token);

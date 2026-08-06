@@ -21,7 +21,7 @@ const app = require('../../app');
 const { truncateAll } = require('./helpers/db');
 const { registerVerifiedUser } = require('./helpers/auth');
 
-const VALID_USER = { email: 'ada@example.com', password: 'password123' };
+const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
 /**
  * Register a verified user and return an agent that carries the auth cookies.
@@ -93,7 +93,7 @@ describe('DELETE /boards/:boardId/concepts', () => {
     const boardId = await createBoard(owner);
     await seedBoard(owner, boardId);
 
-    const intruder = await registerUser({ email: 'mal@example.com', password: 'password123' });
+    const intruder = await registerUser({ email: 'mal@example.com', password: 'Password123!' });
     const res = await intruder.delete(`/boards/${boardId}/concepts`).expect(200);
     // The SQL join scopes the delete to the caller's own board, so nothing is
     // deleted and the owner's data is untouched.
