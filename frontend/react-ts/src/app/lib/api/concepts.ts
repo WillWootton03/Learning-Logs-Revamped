@@ -68,6 +68,17 @@ export function updateConcept(
   });
 }
 
+/**
+ * Set a concept's learned status. Persists by moving the mastery counter to
+ * the board's mastery threshold (learned) or back to 0 (unlearned).
+ */
+export function setConceptLearned(boardId: string, conceptId: string, learned: boolean) {
+  return request<ConceptRow>(`/boards/${boardId}/concepts/${conceptId}/learned`, {
+    method: "PUT",
+    body: JSON.stringify({ learned }),
+  });
+}
+
 /** All tags on a board — used to resolve names to ids when linking. */
 export async function listTags(boardId: string) {
   const res = await request<{ tags: TagRow[] }>(`/boards/${boardId}/tags`);

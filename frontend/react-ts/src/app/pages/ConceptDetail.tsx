@@ -41,7 +41,7 @@ export function ConceptDetail() {
   const { id, conceptId } = useParams<{ id: string; conceptId: string }>();
   const navigate = useNavigate();
   const { boards, isBoardsLoading } = useBoard();
-  const { concepts, loadConcepts, toggleConceptLearned, updateConcept } = useConcepts();
+  const { concepts, loadConcepts, setConceptLearned, updateConcept } = useConcepts();
 
   // Tags with ids — the backend works with tag ids for rename/unlink, but the
   // concept list only carries names, so the page fetches the id map on load.
@@ -229,7 +229,7 @@ export function ConceptDetail() {
         if (meta) await unlinkTag(id, conceptId, meta.tag_id);
       }
       if (learnedChanged) {
-        toggleConceptLearned(id, conceptId);
+        await setConceptLearned(id, conceptId, draftLearned);
       }
       await persistAndRefresh();
       // The detail row alone carries the fresh updated_at for the

@@ -6,6 +6,7 @@ import {
   linkTags,
   listConcepts,
   listTags,
+  setConceptLearned as apiSetConceptLearned,
   updateConcept as apiUpdateConcept,
 } from "../lib/api";
 import { useBoard } from "./BoardContext";
@@ -18,10 +19,11 @@ type ConceptState = {
   createConcept: (boardId: string, input: { prompt: string; answer: string; tags: string[] }) => Promise<Concept>;
   /** Persist an edit to a concept's title/answer on the backend, then update local state. */
   updateConcept: (boardId: string, conceptId: string, changes: { title?: string; answer?: string }) => Promise<void>;
+  /** Persist a concept's learned status on the backend, then update local state. */
+  setConceptLearned: (boardId: string, conceptId: string, learned: boolean) => Promise<void>;
   /** Local, non-persisted add — used by flows that manage persistence themselves. */
   addConcept: (boardId: string, concept: Concept) => void;
   updateConceptTags: (boardId: string, conceptId: string, tags: string[]) => void;
-  toggleConceptLearned: (boardId: string, conceptId: string) => void;
   deleteConcept: (boardId: string, conceptId: string) => void;
 };
 
@@ -136,12 +138,21 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
     }));
   }
 
-  function toggleConceptLearned(boardId: string, conceptId: string) {
-    setConcepts((prev) => ({
-      ...prev,
-      [boardId]: (prev[boardId] ?? []).map((c) => (c.id === conceptId ? { ...c, learned: !c.learned } : c)),
-    }));
-  }
+  /** Persist a learned-status change and mirror the new counter in local state. */
+  const setConceptLearned = useCallback(
+    async (boardId: string, conceptId: string, learned: boolean) => {
+      const row = await apiSetConceptLearned(boardId, conceptId, learned);
+      setConcepts((prev) => ({
+        ...prev,
+        [boardId]: (prev[boardId] ?? []).map((c) =>
+          c.id === conceptId
+            ? { ...c, learned: row.times_answered_correctly >= (thresholdsRef.current[boardId] ?? 0) }
+            : c
+        ),
+      }));
+    },
+    []
+  );
 
   function deleteConcept(boardId: string, conceptId: string) {
     setConcepts((prev) => ({
@@ -157,9 +168,9 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
         loadConcepts,
         createConcept,
         updateConcept,
+        setConceptLearned,
         addConcept,
         updateConceptTags,
-        toggleConceptLearned,
         deleteConcept,
       }}
     >

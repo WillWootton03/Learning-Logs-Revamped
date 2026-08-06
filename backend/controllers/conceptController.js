@@ -50,10 +50,26 @@ async function remove(req, res) {
   return res.status(200).json(result);
 }
 
+/**
+ * PUT /boards/:boardId/concepts/:conceptId/learned — set a concept's learned
+ * status. Persists by moving the mastery counter (threshold when learned,
+ * 0 when unlearned).
+ */
+async function setLearned(req, res) {
+  const concept = await conceptService.setLearned(
+    req.userId,
+    req.params.boardId,
+    req.params.conceptId,
+    req.body.learned
+  );
+  return res.status(200).json(concept);
+}
+
 module.exports = {
   list: asyncHandler(list),
   create: asyncHandler(create),
   getById: asyncHandler(getById),
   update: asyncHandler(update),
   remove: asyncHandler(remove),
+  setLearned: asyncHandler(setLearned),
 };

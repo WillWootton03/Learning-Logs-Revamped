@@ -141,10 +141,31 @@ async function remove(userId, boardId, conceptId) {
   return { concept_id: conceptId };
 }
 
+/**
+ * Set a concept's learned status directly. Because "learned" is derived from
+ * the mastery counter, this moves the counter to the board's mastery
+ * threshold (learned) or back to 0 (unlearned).
+ * @param {string} userId
+ * @param {string} boardId
+ * @param {string} conceptId
+ * @param {boolean} learned
+ * @returns {Promise<object>}
+ * @throws {AppError} 400 if learned is not a boolean, 404 if concept missing.
+ */
+async function setLearned(userId, boardId, conceptId, learned) {
+  if (typeof learned !== 'boolean') {
+    throw new AppError(400, 'learned must be a boolean');
+  }
+  const concept = await conceptRepository.setLearned(userId, boardId, conceptId, learned);
+  if (!concept) throw new AppError(404, 'Concept not found');
+  return concept;
+}
+
 module.exports = {
   list,
   getById,
   create,
   update,
   remove,
+  setLearned,
 };

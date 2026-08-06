@@ -12,6 +12,7 @@ router.get('/', conceptController.list);
 router.post('/', conceptController.create);
 router.get('/:conceptId', conceptController.getById);
 router.put('/:conceptId', conceptController.update);
+router.put('/:conceptId/learned', conceptController.setLearned);
 router.delete('/:conceptId', conceptController.remove);
 
 router.get('/:conceptId/tags', tagController.listConceptTags);

@@ -162,6 +162,34 @@ async function remove(userId, boardId, conceptId) {
   return result.rowCount > 0;
 }
 
+/**
+ * Set a concept's learned status by moving its mastery counter: up to the
+ * board's mastery_threshold when learned, back to 0 when unlearned. "Learned"
+ * stays a derived property (counter >= threshold) everywhere, so a single
+ * UPDATE keeps every consumer consistent. Joined through boards so it cannot
+ * touch another user's concept.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @param {string} conceptId - Concept id (UUID).
+ * @param {boolean} learned - True marks learned, false marks unlearned.
+ * @returns {Promise<object|null>} Updated concept row or null.
+ */
+async function setLearned(userId, boardId, conceptId, learned) {
+  const result = await pool.query(
+    `UPDATE concepts c
+     SET times_answered_correctly = CASE WHEN $4 THEN b.mastery_threshold ELSE 0 END,
+         updated_at = now()
+     FROM boards b
+     WHERE c.concept_id = $1
+       AND c.board_id = b.board_id
+       AND b.board_id = $2
+       AND b.user_id = $3
+     RETURNING c.concept_id, c.prompt, c.answer, c.times_answered_correctly`,
+    [conceptId, boardId, userId, learned]
+  );
+  return result.rows[0] || null;
+}
+
 module.exports = {
   findAllByBoard,
   findById,
@@ -169,4 +197,5 @@ module.exports = {
   create,
   update,
   remove,
+  setLearned,
 };
