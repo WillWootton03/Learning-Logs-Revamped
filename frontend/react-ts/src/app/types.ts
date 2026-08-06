@@ -50,6 +50,8 @@ export type SessionRecord = {
   conceptsStudied: number;
   correctCount: number;
   duration: string;
+  /** Raw elapsed time in ms — used to compute totals without parsing the label. */
+  timeElapsedMs: number;
   date: string;
   results: ConceptResult[];
 };

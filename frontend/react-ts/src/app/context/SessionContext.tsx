@@ -1,9 +1,12 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { SessionPreset, SessionRecord } from "../types";
+import { listRuns } from "../lib/api";
 
 type SessionState = {
+  /** Quiz runs per board, keyed by board id. */
+  sessions: Record<string, SessionRecord[]>;
+  loadSessions: (boardId: string) => Promise<void>;
   sessionPresets: SessionPreset[];
-  sessions: SessionRecord[];
   addSessionPreset: (preset: SessionPreset) => void;
   updateSessionPreset: (preset: SessionPreset) => void;
   deleteSessionPreset: (id: string) => void;
@@ -12,10 +15,15 @@ type SessionState = {
 const SessionContext = createContext<SessionState | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const [sessions, setSessions] = useState<Record<string, SessionRecord[]>>({});
+  // Preset CRUD is still local-only until the "start a session" flow is wired
+  // to the quiz-settings endpoints (which require a quiz style).
   const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>([]);
-  // Backed by the quiz-runs model; still empty until the sessions UI is wired
-  // to the quiz endpoints. Kept as state so future recording writes here.
-  const [sessions] = useState<SessionRecord[]>([]);
+
+  const loadSessions = useCallback(async (boardId: string) => {
+    const runs = await listRuns(boardId);
+    setSessions((prev) => ({ ...prev, [boardId]: runs }));
+  }, []);
 
   function addSessionPreset(preset: SessionPreset) {
     setSessionPresets((prev) => [...prev, preset]);
@@ -31,7 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext.Provider
-      value={{ sessionPresets, sessions, addSessionPreset, updateSessionPreset, deleteSessionPreset }}
+      value={{ sessions, loadSessions, sessionPresets, addSessionPreset, updateSessionPreset, deleteSessionPreset }}
     >
       {children}
     </SessionContext.Provider>
