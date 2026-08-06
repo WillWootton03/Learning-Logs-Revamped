@@ -12,7 +12,7 @@ async function findAllByBoard(userId, boardId) {
      FROM logs l
      JOIN boards b ON b.board_id = l.board_id
      WHERE l.board_id = $1 AND b.user_id = $2
-     ORDER BY l.updated_at`,
+     ORDER BY l.updated_at DESC`,
     [boardId, userId]
   );
   return result.rows;

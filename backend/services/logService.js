@@ -13,12 +13,13 @@ function validateTitle(title) {
 }
 
 /**
- * Validate log content: required, non-empty string.
+ * Validate log content: must be a string when provided. Notes are optional —
+ * an empty body is a valid log — so there is no non-empty requirement.
  * @param {*} content
  * @returns {boolean}
  */
 function validateContent(content) {
-  return typeof content === 'string' && content.trim().length > 0;
+  return typeof content === 'string';
 }
 
 /**
@@ -49,7 +50,7 @@ async function getById(userId, boardId, logId) {
  * Create a log on a board the user owns.
  * @param {string} userId
  * @param {string} boardId
- * @param {{title: string, content: string}} data
+ * @param {{title: string, content?: string}} data
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid fields, 404 if board missing/foreign.
  */
@@ -57,10 +58,10 @@ async function create(userId, boardId, { title, content }) {
   if (!validateTitle(title)) {
     throw new AppError(400, `Title is required (max ${MAX_TITLE_LENGTH} characters)`);
   }
-  if (!validateContent(content)) {
-    throw new AppError(400, 'Content is required');
+  if (!validateContent(content ?? '')) {
+    throw new AppError(400, 'Content must be a string');
   }
-  const log = await logRepository.create(userId, boardId, { title: title.trim(), content });
+  const log = await logRepository.create(userId, boardId, { title: title.trim(), content: content ?? '' });
   if (!log) throw new AppError(404, 'Board not found');
   return log;
 }
@@ -84,7 +85,7 @@ async function update(userId, boardId, logId, { title, content }) {
   }
   if (content !== undefined) {
     if (!validateContent(content)) {
-      throw new AppError(400, 'Content is required');
+      throw new AppError(400, 'Content must be a string');
     }
     changes.content = content;
   }
