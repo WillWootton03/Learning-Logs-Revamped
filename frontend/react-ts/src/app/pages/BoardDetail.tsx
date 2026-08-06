@@ -15,7 +15,7 @@ import {
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { AddConceptModal } from "../components/AddConceptModal";
-import { ComingSoonModal } from "../components/ComingSoonModal";
+import { CSVUploadModal } from "../components/CSVUploadModal";
 import { SessionModal } from "../components/SessionModal";
 import { BackButton } from "../components/BackButton";
 
@@ -236,12 +236,7 @@ export function BoardDetail() {
         onClose={() => setSessionOpen(false)}
         onStart={(presetId) => navigate(`/app/board/${id}/sessions/play?presetId=${presetId}`)}
       />
-      <ComingSoonModal
-        open={csvOpen}
-        onClose={() => setCsvOpen(false)}
-        title="Upload CSV"
-        description="Bulk-importing concepts from a CSV needs a new import endpoint. Coming soon."
-      />
+      <CSVUploadModal boardId={id!} open={csvOpen} onClose={() => setCsvOpen(false)} />
     </>
   );
 }

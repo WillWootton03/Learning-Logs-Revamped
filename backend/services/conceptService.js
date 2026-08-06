@@ -5,6 +5,8 @@ const { isUuid } = require('../utils/validate');
 const MAX_PROMPT_LENGTH = 500;
 const MAX_ANSWER_LENGTH = 500;
 const MAX_HINT_LENGTH = 500;
+const MAX_TAG_LENGTH = 50;
+const MAX_IMPORT_ROWS = 500;
 
 /**
  * Validate a concept prompt: required, non-empty, max 500 chars.
@@ -161,6 +163,69 @@ async function setLearned(userId, boardId, conceptId, learned) {
   return concept;
 }
 
+/**
+ * Bulk-import concepts with their tags from CSV-derived rows. Validates every
+ * row up front (so one bad row rejects the whole import rather than a partial
+ * insert), normalizes tag names, then delegates to the transactional batch
+ * insert (tags → concepts → links).
+ * @param {string} userId
+ * @param {string} boardId
+ * @param {*} rows - Array of { prompt, answer, hint, tags } objects.
+ * @returns {Promise<Array<object>>} Created concept rows with their tag names.
+ * @throws {AppError} 400 on an empty/invalid payload or any bad row, 404 if
+ *   the board is missing/foreign.
+ */
+async function importMany(userId, boardId, rows) {
+  if (rows === undefined || rows === null || !Array.isArray(rows)) {
+    throw new AppError(400, 'concepts must be an array');
+  }
+  if (rows.length === 0) {
+    throw new AppError(400, 'Provide at least one concept to import');
+  }
+  if (rows.length > MAX_IMPORT_ROWS) {
+    throw new AppError(400, `Import is limited to ${MAX_IMPORT_ROWS} concepts at a time`);
+  }
+
+  const cleaned = rows.map((row, i) => {
+    if (!row || typeof row !== 'object') {
+      throw new AppError(400, `Row ${i + 1} is not a valid concept`);
+    }
+    const { prompt, answer, hint, tags } = row;
+    if (!validatePrompt(prompt)) {
+      throw new AppError(400, `Row ${i + 1}: prompt is required (max ${MAX_PROMPT_LENGTH} characters)`);
+    }
+    if (!validateAnswer(answer)) {
+      throw new AppError(400, `Row ${i + 1}: answer is required (max ${MAX_ANSWER_LENGTH} characters)`);
+    }
+    if (!validateHint(hint)) {
+      throw new AppError(400, `Row ${i + 1}: hint cannot exceed ${MAX_HINT_LENGTH} characters`);
+    }
+    if (tags !== undefined && tags !== null && typeof tags !== 'string' && !Array.isArray(tags)) {
+      throw new AppError(400, `Row ${i + 1}: tags must be a comma-separated string or an array of strings`);
+    }
+    // Tags arrive as a comma-separated string (e.g. "hooks,react,intermediate");
+    // normalize both forms into a clean, de-duplicated array of trimmed names.
+    const rawTags =
+      typeof tags === 'string'
+        ? tags.split(',').map((t) => t.trim()).filter((t) => t.length > 0)
+        : tags ?? [];
+    const tagList = [...new Set(rawTags.map((t) => (typeof t === 'string' ? t.trim() : '')).filter((t) => t.length > 0))];
+    for (const tag of tagList) {
+      if (typeof tag !== 'string' || tag.length > MAX_TAG_LENGTH) {
+        throw new AppError(400, `Row ${i + 1}: tags cannot exceed ${MAX_TAG_LENGTH} characters`);
+      }
+    }
+    return {
+      prompt: prompt.trim(),
+      answer: answer.trim(),
+      hint: hint === null || hint === undefined || hint === '' ? null : hint.trim(),
+      tags: tagList,
+    };
+  });
+
+  return conceptRepository.importMany(userId, boardId, cleaned);
+}
+
 module.exports = {
   list,
   getById,
@@ -168,4 +233,5 @@ module.exports = {
   update,
   remove,
   setLearned,
+  importMany,
 };

@@ -56,6 +56,26 @@ export function createConcept(boardId: string, data: { prompt: string; answer: s
   });
 }
 
+/** A single CSV-derived row: prompt/answer/hint strings plus a tag-name list. */
+export type ImportConceptRow = {
+  prompt: string;
+  answer: string;
+  hint: string | null;
+  tags: string[];
+};
+
+/**
+ * Bulk-import concepts with their tags in one transactional call. The backend
+ * batch-creates tags, then concepts, then the links.
+ */
+export async function importConcepts(boardId: string, rows: ImportConceptRow[]) {
+  const res = await request<{ concepts: ConceptRow[] }>(`/boards/${boardId}/concepts/import`, {
+    method: "POST",
+    body: JSON.stringify({ concepts: rows }),
+  });
+  return res.concepts;
+}
+
 /** Update a concept's prompt and/or answer. Fields not passed are left unchanged. */
 export function updateConcept(
   boardId: string,

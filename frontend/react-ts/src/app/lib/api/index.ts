@@ -21,4 +21,5 @@ export {
 } from "./quizSettings";
 export { generateQuestions, recordRun, recordRunFromSettings } from "./quizzes";
 export type { QuizStyle, QuizQuestion, QuizAnswer, QuizScoredResult } from "./quizzes";
-export { listConcepts, createConcept, updateConcept, setConceptLearned, deleteConcept, listTags, createTag, linkTag, createTags, linkTags, getConcept, listConceptTags, unlinkTag, updateTag, deleteTag } from "./concepts";
+export { listConcepts, createConcept, updateConcept, setConceptLearned, deleteConcept, listTags, createTag, linkTag, createTags, linkTags, getConcept, listConceptTags, unlinkTag, updateTag, deleteTag, importConcepts } from "./concepts";
+export type { ImportConceptRow } from "./concepts";

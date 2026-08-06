@@ -10,6 +10,7 @@ router.use(authenticate);
 
 router.get('/', conceptController.list);
 router.post('/', conceptController.create);
+router.post('/import', conceptController.importMany);
 router.get('/:conceptId', conceptController.getById);
 router.put('/:conceptId', conceptController.update);
 router.put('/:conceptId/learned', conceptController.setLearned);

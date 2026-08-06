@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   Save,
+  Trash2,
 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
@@ -41,7 +42,7 @@ export function ConceptDetail() {
   const { id, conceptId } = useParams<{ id: string; conceptId: string }>();
   const navigate = useNavigate();
   const { boards, isBoardsLoading } = useBoard();
-  const { concepts, loadConcepts, setConceptLearned, updateConcept } = useConcepts();
+  const { concepts, loadConcepts, setConceptLearned, updateConcept, deleteConcept } = useConcepts();
 
   // Tags with ids — the backend works with tag ids for rename/unlink, but the
   // concept list only carries names, so the page fetches the id map on load.
@@ -52,6 +53,8 @@ export function ConceptDetail() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Concept editing state — edits are staged locally and only pushed to the
   // backend as one package on Save. Cancelling (or saving an unchanged
@@ -241,6 +244,22 @@ export function ConceptDetail() {
       setLoadError(err instanceof Error ? err.message : "Failed to save concept");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  /** Delete the concept from the backend, then leave the page. */
+  async function handleDelete() {
+    if (!id || !conceptId) return;
+    setIsDeleting(true);
+    setLoadError(null);
+    try {
+      await deleteConcept(id, conceptId);
+      navigate(`/app/board/${id}/concepts`);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to delete concept");
+      setDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -452,6 +471,16 @@ export function ConceptDetail() {
                 >
                   <Pencil className="w-3 h-3" />
                   Edit
+                </button>
+              )}
+              {!isEditing && (
+                <button
+                  onClick={() => setDeleteOpen(true)}
+                  className="flex items-center gap-1.5 text-muted-foreground hover:text-rose-400 transition-colors text-xs font-mono border border-border hover:border-rose-500/40 px-2.5 py-1.5 rounded-lg"
+                  title="Delete concept"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete
                 </button>
               )}
               {isEditing ? (
@@ -777,6 +806,55 @@ export function ConceptDetail() {
         title="Review again"
         description="Solo review mode for a single concept. We'll wire this up when quiz sessions land."
       />
+
+      {/* delete confirmation */}
+      <AnimatePresence>
+        {deleteOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setDeleteOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.18 }}
+              className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl shadow-black/50"
+              style={{ fontFamily: "var(--font-sans)" }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center">
+                  <Trash2 className="w-4 h-4 text-rose-400" />
+                </div>
+                <h2 className="text-foreground">Delete concept?</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                “{concept.title}” and its quiz history will be permanently removed from this board.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-500/90 text-white text-sm hover:bg-rose-500 transition-colors disabled:opacity-40"
+                >
+                  {isDeleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

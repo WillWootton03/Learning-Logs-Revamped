@@ -86,10 +86,6 @@ export function Landing() {
           transition={{ duration: 0.5 }}
           className="flex flex-col items-center gap-6"
         >
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-mono">
-            <Zap className="w-3 h-3" />
-            Active recall, built for how you actually study
-          </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl text-foreground max-w-3xl leading-tight" style={{ fontWeight: 600 }}>
             Learn anything.<br />

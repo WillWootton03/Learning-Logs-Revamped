@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { Search, CheckCircle2, Circle, Plus } from "lucide-react";
+import { Search, CheckCircle2, Circle, Plus, Upload } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { AddConceptModal } from "../components/AddConceptModal";
+import { CSVUploadModal } from "../components/CSVUploadModal";
 import { BackButton } from "../components/BackButton";
 
 type Filter = "all" | "learned" | "unlearned";
@@ -19,6 +20,7 @@ export function AllConcepts() {
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [addConceptOpen, setAddConceptOpen] = useState(false);
+  const [csvOpen, setCsvOpen] = useState(false);
   // Tracks the board whose concepts have finished loading; while it doesn't
   // match the current route the page shows a spinner. Using derived state
   // (rather than resetting flags in the effect) keeps all writes in callbacks.
@@ -100,13 +102,22 @@ export function AllConcepts() {
             <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
             <h1 className="text-foreground">All Concepts</h1>
           </div>
-          <button
-            onClick={() => setAddConceptOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add concept
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCsvOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Upload CSV
+            </button>
+            <button
+              onClick={() => setAddConceptOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add concept
+            </button>
+          </div>
         </div>
       </div>
 
@@ -241,6 +252,7 @@ export function AllConcepts() {
       </div>
 
       <AddConceptModal boardId={id!} open={addConceptOpen} onClose={() => setAddConceptOpen(false)} />
+      <CSVUploadModal boardId={id!} open={csvOpen} onClose={() => setCsvOpen(false)} />
     </main>
   );
 }

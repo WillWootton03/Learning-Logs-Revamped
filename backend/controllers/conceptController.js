@@ -65,6 +65,19 @@ async function setLearned(req, res) {
   return res.status(200).json(concept);
 }
 
+/**
+ * POST /boards/:boardId/concepts/import — bulk-import concepts (with their
+ * tags) from CSV-derived rows. The service does the whole import transactionally.
+ */
+async function importMany(req, res) {
+  const concepts = await conceptService.importMany(
+    req.userId,
+    req.params.boardId,
+    req.body.concepts
+  );
+  return res.status(201).json({ concepts });
+}
+
 module.exports = {
   list: asyncHandler(list),
   create: asyncHandler(create),
@@ -72,4 +85,5 @@ module.exports = {
   update: asyncHandler(update),
   remove: asyncHandler(remove),
   setLearned: asyncHandler(setLearned),
+  importMany: asyncHandler(importMany),
 };

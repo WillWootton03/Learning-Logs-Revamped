@@ -1,4 +1,6 @@
 const pool = require('../db/pool');
+const crypto = require('crypto');
+const AppError = require('../services/AppError');
 
 /**
  * List all concepts on a board, verifying board ownership via JOIN.
@@ -190,6 +192,109 @@ async function setLearned(userId, boardId, conceptId, learned) {
   return result.rows[0] || null;
 }
 
+/**
+ * Bulk-import concepts with their tags in one transaction. Order of work:
+ * tags first (idempotent batch insert), then concepts (batch insert), then
+ * the concept↔tag links (batch insert). Every statement is joined through
+ * boards so it can only touch the user's own board; the whole import commits
+ * or rolls back as a unit.
+ *
+ * Tag names are matched by name (not id) because a CSV names tags; a tag that
+ * already exists on the board is reused rather than duplicated. The returned
+ * concept rows carry their tag names so the caller can seed local state.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @param {Array<{prompt: string, answer: string, hint: string|null, tags: string[]}>} rows
+ * @returns {Promise<Array<object>>} Created concept rows (concept_id, prompt,
+ *   answer, hint, tags) or null if the board isn't the user's.
+ */
+async function importMany(userId, boardId, rows) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Tags first: collect every unique tag name across all rows, batch
+    //    insert any that don't exist yet (ON CONFLICT skips existing), then
+    //    read back the ids for all names so links can reference them.
+    const tagNames = [...new Set(rows.flatMap((row) => row.tags))];
+    const tagIdByName = new Map();
+    if (tagNames.length > 0) {
+      await client.query(
+        `INSERT INTO tags (board_id, name)
+         SELECT b.board_id, input.name
+         FROM unnest($2::text[]) AS input(name)
+         JOIN boards b ON b.board_id = $1 AND b.user_id = $3
+         ON CONFLICT (board_id, name) DO NOTHING`,
+        [boardId, tagNames, userId]
+      );
+      const tagResult = await client.query(
+        `SELECT t.tag_id, t.name
+         FROM tags t
+         JOIN boards b ON b.board_id = t.board_id
+         WHERE t.board_id = $1 AND b.user_id = $2 AND t.name = ANY($3::text[])
+         ORDER BY t.name`,
+        [boardId, userId, tagNames]
+      );
+      for (const tag of tagResult.rows) {
+        tagIdByName.set(tag.name, tag.tag_id);
+      }
+    }
+
+    // 2. Concepts next: batch insert all rows. Prompt/answer are required and
+    //    the INSERT is guarded by a board-ownership join, so no row returned
+    //    means the board doesn't exist or isn't the user's.
+    const prompts = rows.map((row) => row.prompt);
+    const answers = rows.map((row) => row.answer);
+    const hints = rows.map((row) => row.hint);
+    const conceptResult = await client.query(
+      `INSERT INTO concepts (board_id, prompt, answer, hint)
+       SELECT b.board_id, input.prompt, input.answer, input.hint
+       FROM unnest($2::text[], $3::text[], $4::text[]) AS input(prompt, answer, hint)
+       JOIN boards b ON b.board_id = $1 AND b.user_id = $5
+       RETURNING concept_id, prompt, answer, hint`,
+      [boardId, prompts, answers, hints, userId]
+    );
+    const concepts = conceptResult.rows;
+    if (concepts.length !== rows.length) {
+      throw new AppError(404, 'Board not found or not owned');
+    }
+
+    // 3. Links last: each concept maps back to its tags by position (the
+    //    INSERT returned one row per input row, in order). Build parallel
+    //    concept_id/tag_id arrays and batch insert them.
+    const linkConceptIds = [];
+    const linkTagIds = [];
+    for (let i = 0; i < rows.length; i += 1) {
+      for (const tagName of rows[i].tags) {
+        const tagId = tagIdByName.get(tagName);
+        if (tagId) {
+          linkConceptIds.push(concepts[i].concept_id);
+          linkTagIds.push(tagId);
+        }
+      }
+    }
+    if (linkConceptIds.length > 0) {
+      await client.query(
+        `INSERT INTO concept_tags (concept_id, tag_id)
+         SELECT input.concept_id, input.tag_id
+         FROM unnest($1::uuid[], $2::uuid[]) AS input(concept_id, tag_id)
+         JOIN concepts c ON c.concept_id = input.concept_id
+         JOIN boards b ON b.board_id = c.board_id AND b.user_id = $3
+         ON CONFLICT (concept_id, tag_id) DO NOTHING`,
+        [linkConceptIds, linkTagIds, userId]
+      );
+    }
+
+    await client.query('COMMIT');
+    return concepts.map((concept, i) => ({ ...concept, tags: rows[i].tags }));
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   findAllByBoard,
   findById,
@@ -198,4 +303,5 @@ module.exports = {
   update,
   remove,
   setLearned,
+  importMany,
 };
