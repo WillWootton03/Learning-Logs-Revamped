@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  ArrowLeft,
   CheckCircle2,
   Circle,
   CalendarDays,
@@ -27,6 +26,7 @@ import {
   updateTag,
 } from "../lib/api";
 import { ComingSoonModal } from "../components/ComingSoonModal";
+import { BackButton } from "../components/BackButton";
 
 type TagMeta = { tag_id: string; name: string };
 
@@ -416,30 +416,8 @@ export function ConceptDetail() {
   return (
     <>
       <main className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-8">
-        {/* breadcrumb */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-            <button onClick={() => navigate("/app")} className="hover:text-foreground transition-colors">
-              Dashboard
-            </button>
-            <span>/</span>
-            <button
-              onClick={() => navigate(`/app/board/${id}`)}
-              className="hover:text-foreground transition-colors"
-            >
-              {board.title}
-            </button>
-            <span>/</span>
-            <span className="text-foreground truncate">{concept.title}</span>
-          </div>
-          <button
-            onClick={() => navigate(`/app/board/${id}`)}
-            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-sm w-fit mt-1"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to board
-          </button>
-        </div>
+        {/* back to the concepts list */}
+        <BackButton to={`/app/board/${id}/concepts`} label="Concepts" />
 
         {/* header */}
         <motion.div

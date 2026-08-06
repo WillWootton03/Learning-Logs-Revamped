@@ -58,3 +58,25 @@ export function createBoard(data: { title: string; subject: string; color: strin
     body: JSON.stringify({ name: data.title, subject: data.subject, color: data.color }),
   }).then(toBoard);
 }
+
+/** Update a board's name, subject, color, and/or mastery threshold. */
+export function updateBoard(
+  boardId: string,
+  changes: { name?: string; subject?: string; color?: string; masteryThreshold?: number }
+) {
+  return request<BoardRow>(`/boards/${boardId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      name: changes.name,
+      subject: changes.subject,
+      color: changes.color,
+      masteryThreshold: changes.masteryThreshold,
+    }),
+  }).then(toBoard);
+}
+
+export function deleteBoard(boardId: string) {
+  return request<{ board_id: string }>(`/boards/${boardId}`, {
+    method: "DELETE",
+  });
+}

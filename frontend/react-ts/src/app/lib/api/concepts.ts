@@ -68,6 +68,12 @@ export function updateConcept(
   });
 }
 
+export function deleteConcept(boardId: string, conceptId: string) {
+  return request<{ concept_id: string }>(`/boards/${boardId}/concepts/${conceptId}`, {
+    method: "DELETE",
+  });
+}
+
 /**
  * Set a concept's learned status. Persists by moving the mastery counter to
  * the board's mastery threshold (learned) or back to 0 (unlearned).
@@ -137,5 +143,12 @@ export function updateTag(boardId: string, tagId: string, name: string) {
   return request<TagRow>(`/boards/${boardId}/tags/${tagId}`, {
     method: "PUT",
     body: JSON.stringify({ name }),
+  });
+}
+
+/** Delete a tag from the board (unlinks it from all concepts). */
+export function deleteTag(boardId: string, tagId: string) {
+  return request<{ tag_id: string }>(`/boards/${boardId}/tags/${tagId}`, {
+    method: "DELETE",
   });
 }

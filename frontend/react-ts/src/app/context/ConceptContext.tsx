@@ -3,6 +3,7 @@ import type { Concept } from "../types";
 import {
   createConcept as apiCreateConcept,
   createTags,
+  deleteConcept as apiDeleteConcept,
   linkTags,
   listConcepts,
   listTags,
@@ -24,7 +25,8 @@ type ConceptState = {
   /** Local, non-persisted add — used by flows that manage persistence themselves. */
   addConcept: (boardId: string, concept: Concept) => void;
   updateConceptTags: (boardId: string, conceptId: string, tags: string[]) => void;
-  deleteConcept: (boardId: string, conceptId: string) => void;
+  /** Persist a concept's deletion on the backend, then remove it locally. */
+  deleteConcept: (boardId: string, conceptId: string) => Promise<void>;
 };
 
 const ConceptContext = createContext<ConceptState | null>(null);
@@ -154,7 +156,8 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  function deleteConcept(boardId: string, conceptId: string) {
+  async function deleteConcept(boardId: string, conceptId: string) {
+    await apiDeleteConcept(boardId, conceptId);
     setConcepts((prev) => ({
       ...prev,
       [boardId]: (prev[boardId] ?? []).filter((c) => c.id !== conceptId),

@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Board } from "../types";
-import { createBoard as apiCreateBoard, listBoards } from "../lib/api";
+import {
+  createBoard as apiCreateBoard,
+  deleteBoard as apiDeleteBoard,
+  listBoards,
+  updateBoard as apiUpdateBoard,
+} from "../lib/api";
 import { useAuth } from "./AuthContext";
 
 /** The summary counts that live on a Board and are derived from its concepts. */
@@ -14,6 +19,13 @@ type BoardState = {
   boardsError: string | null;
   reloadBoards: () => Promise<void>;
   createBoard: (input: { title: string; subject: string; color: string }) => Promise<Board>;
+  /** Persist board edits (name, subject, color, mastery threshold) and mirror them locally. */
+  updateBoard: (
+    boardId: string,
+    changes: { name?: string; subject?: string; color?: string; masteryThreshold?: number }
+  ) => Promise<void>;
+  /** Delete a board on the backend and remove it from local state. */
+  deleteBoard: (boardId: string) => Promise<void>;
   /**
    * Keep a board's concept-derived counts in sync after concept mutations.
    * Exposed for the ConceptContext, which recomputes these numbers — pages
@@ -78,6 +90,31 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     return board;
   }
 
+  async function updateBoard(
+    boardId: string,
+    changes: { name?: string; subject?: string; color?: string; masteryThreshold?: number }
+  ) {
+    const updated = await apiUpdateBoard(boardId, changes);
+    setBoards((prev) =>
+      prev.map((b) =>
+        b.id === boardId
+          ? {
+              ...b,
+              title: updated.title,
+              subject: updated.subject,
+              color: updated.color,
+              masteryThreshold: updated.masteryThreshold,
+            }
+          : b
+      )
+    );
+  }
+
+  async function deleteBoard(boardId: string) {
+    await apiDeleteBoard(boardId);
+    setBoards((prev) => prev.filter((b) => b.id !== boardId));
+  }
+
   // Bail out when the counts are unchanged so the stats sync never churns a
   // fresh boards array (which would re-create loadConcepts and restart the
   // board page's fetch effect in a loop).
@@ -100,6 +137,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         boardsError,
         reloadBoards,
         createBoard,
+        updateBoard,
+        deleteBoard,
         updateBoardStats,
       }}
     >

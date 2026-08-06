@@ -5,6 +5,7 @@ import { FileText, Pencil, Plus } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useLogs } from "../context/LogContext";
 import { LogModal } from "../components/LogModal";
+import { BackButton } from "../components/BackButton";
 import type { Log } from "../types";
 
 /** Compact "Aug 4 · 7:05 PM" style timestamp from an ISO string. */
@@ -91,18 +92,21 @@ export function Logs() {
 
   return (
     <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
-          <h1 className="text-foreground">Logs</h1>
+      <div className="flex flex-col gap-4">
+        <BackButton to={`/app/board/${id}`} label={board.title} />
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
+            <h1 className="text-foreground">Logs</h1>
+          </div>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New log
+          </button>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New log
-        </button>
       </div>
 
       {isLoading ? (

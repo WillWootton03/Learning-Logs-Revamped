@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
-  ArrowLeft,
   CheckCircle2,
   Circle,
   BookOpen,
@@ -17,6 +16,7 @@ import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { AddConceptModal } from "../components/AddConceptModal";
 import { ComingSoonModal } from "../components/ComingSoonModal";
+import { BackButton } from "../components/BackButton";
 
 export function BoardDetail() {
   const { id } = useParams<{ id: string }>();
@@ -86,13 +86,7 @@ export function BoardDetail() {
       <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
         {/* back + header */}
         <div className="flex flex-col gap-4">
-          <button
-            onClick={() => navigate("/app")}
-            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-sm w-fit"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Dashboard
-          </button>
+          <BackButton to="/app" label="Dashboard" />
 
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>

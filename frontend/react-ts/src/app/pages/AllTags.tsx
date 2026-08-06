@@ -6,6 +6,7 @@ import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { listTags } from "../lib/api";
 import { TagModal } from "../components/TagModal";
+import { BackButton } from "../components/BackButton";
 
 export function AllTags() {
   const { id } = useParams<{ id: string }>();
@@ -88,18 +89,21 @@ export function AllTags() {
 
   return (
     <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
-          <h1 className="text-foreground">All Tags</h1>
+      <div className="flex flex-col gap-4">
+        <BackButton to={`/app/board/${id}`} label={board.title} />
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
+            <h1 className="text-foreground">All Tags</h1>
+          </div>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New tag
+          </button>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New tag
-        </button>
       </div>
 
       {isLoading ? (

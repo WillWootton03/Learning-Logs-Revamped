@@ -5,6 +5,7 @@ import { Search, CheckCircle2, Circle, Plus } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { AddConceptModal } from "../components/AddConceptModal";
+import { BackButton } from "../components/BackButton";
 
 type Filter = "all" | "learned" | "unlearned";
 
@@ -92,18 +93,21 @@ export function AllConcepts() {
 
   return (
     <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
-          <h1 className="text-foreground">All Concepts</h1>
+      <div className="flex flex-col gap-4">
+        <BackButton to={`/app/board/${id}`} label={board.title} />
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
+            <h1 className="text-foreground">All Concepts</h1>
+          </div>
+          <button
+            onClick={() => setAddConceptOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add concept
+          </button>
         </div>
-        <button
-          onClick={() => setAddConceptOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add concept
-        </button>
       </div>
 
       {/* filters */}

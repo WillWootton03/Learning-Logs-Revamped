@@ -3,17 +3,7 @@ import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowLeft, Check, Plus } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
-
-const COLORS = [
-  "#7c6af7", "#4fb8f0", "#f07c4f", "#4ff0b8",
-  "#f04fb0", "#f0c94f", "#a78bfa", "#34d399",
-];
-
-const SUBJECTS = [
-  "Math", "Science", "History", "English", "Languages",
-  "Computer Science", "Art", "Music", "Psychology", "Economics",
-  "Other",
-];
+import { COLORS, SUBJECTS } from "../lib/boardOptions";
 
 export function NewBoard() {
   const navigate = useNavigate();
