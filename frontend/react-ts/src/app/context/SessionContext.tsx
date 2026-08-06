@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { SessionPreset, SessionRecord } from "../types";
 import {
   addQuizSettingsTags,
@@ -43,13 +43,6 @@ const SessionContext = createContext<SessionState | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<Record<string, SessionRecord[]>>({});
   const [sessionPresets, setSessionPresets] = useState<Record<string, SessionPreset[]>>({});
-  // Mirror of sessionPresets for stable callbacks: loadSessionPresets reads
-  // the freshest presets here instead of depending on state, so its identity
-  // never changes (which would otherwise loop the effects that depend on it).
-  const sessionPresetsRef = useRef(sessionPresets);
-  useEffect(() => {
-    sessionPresetsRef.current = sessionPresets;
-  }, [sessionPresets]);
 
   const loadSessions = useCallback(async (boardId: string) => {
     const runs = await listRuns(boardId);
@@ -57,16 +50,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadSessionPresets = useCallback(async (boardId: string) => {
+    // matchAllTags and exactMatching are both persisted server-side now, so a
+    // refetch returns the authoritative modes and needs no local carry-over.
     const presets = await listQuizSettings(boardId);
-    // matchAllTags is frontend-only, so a refetch must not clobber the mode
-    // the user picked for presets that are already in local state.
-    const existing = new Map((sessionPresetsRef.current[boardId] ?? []).map((p) => [p.id, p]));
-    const merged = presets.map((p) => {
-      const ex = existing.get(p.id);
-      return ex ? { ...p, matchAllTags: ex.matchAllTags } : p;
-    });
-    setSessionPresets((prev) => ({ ...prev, [boardId]: merged }));
-    return merged;
+    setSessionPresets((prev) => ({ ...prev, [boardId]: presets }));
+    return presets;
   }, []);
 
   const createSessionPreset = useCallback(
@@ -86,14 +74,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         style: input.style,
         includeKnown: input.includeKnown,
         exactMatching: input.exactMatching,
+        matchAllTags: input.matchAllTags,
         tagIds: input.tagIds ?? [],
       });
-      // The backend doesn't persist match-all mode, so carry that picked mode
-      // over onto the created preset's local state (exact matching IS
-      // persisted, so it comes back from the server already).
-      const withMode = { ...preset, matchAllTags: input.matchAllTags };
-      setSessionPresets((prev) => ({ ...prev, [boardId]: [...(prev[boardId] ?? []), withMode] }));
-      return withMode;
+      // Both modes come back from the server (they're persisted), so the
+      // created preset needs no local carry-over.
+      setSessionPresets((prev) => ({ ...prev, [boardId]: [...(prev[boardId] ?? []), preset] }));
+      return preset;
     },
     []
   );
@@ -106,6 +93,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         style: preset.style,
         includeKnown: preset.includeKnown,
         exactMatching: preset.exactMatching,
+        matchAllTags: preset.matchAllTags,
       });
       // Tag filtering is managed through the separate add/remove endpoints, so
       // diff the saved filter against the edited one.
@@ -115,16 +103,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const toRemove = prevIds.filter((id) => !nextIds.includes(id));
       if (toAdd.length > 0) await addQuizSettingsTags(boardId, preset.id, toAdd);
       if (toRemove.length > 0) await removeQuizSettingsTags(boardId, preset.id, toRemove);
-      // Refetch so local state reflects the server's canonical tag_ids, then
-      // restore the match-all mode (the only frontend-only field — exact
-      // matching is persisted and comes back from the server).
+      // Refetch so local state reflects the server's canonical tag_ids, mode
+      // flags included (both are persisted now).
       await loadSessionPresets(boardId);
-      setSessionPresets((prev) => ({
-        ...prev,
-        [boardId]: (prev[boardId] ?? []).map((p) =>
-          p.id === preset.id ? { ...p, matchAllTags: preset.matchAllTags } : p
-        ),
-      }));
     },
     [sessionPresets, loadSessionPresets]
   );

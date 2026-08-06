@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useAuth } from "../context/AuthContext";
-import { displayNameFromEmail, initialsFromEmail } from "../lib/userName";
+import { displayName, initials } from "../lib/userName";
 
 export function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -47,8 +47,8 @@ export function Navbar() {
     }`;
   }
 
-  const displayName = displayNameFromEmail(user?.email);
-  const initials = initialsFromEmail(user?.email);
+  const displayNameValue = displayName(user?.fullName, user?.email);
+  const initialsValue = initials(user?.fullName, user?.email);
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
@@ -118,9 +118,9 @@ export function Navbar() {
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${userMenuOpen ? "bg-secondary" : "hover:bg-secondary/60"}`}
               >
                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
-                  <span className="text-[10px] text-primary font-mono">{initials}</span>
+                  <span className="text-[10px] text-primary font-mono">{initialsValue}</span>
                 </div>
-                <span className="text-sm text-foreground hidden sm:block">{displayName}</span>
+                <span className="text-sm text-foreground hidden sm:block">{displayNameValue}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 hidden sm:block ${userMenuOpen ? "rotate-180" : ""}`} />
               </button>
 
@@ -134,7 +134,7 @@ export function Navbar() {
                     className="absolute right-0 top-[calc(100%+8px)] w-52 bg-card border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50"
                   >
                     <div className="px-4 py-3 border-b border-border">
-                      <p className="text-sm text-foreground">{displayName}</p>
+                      <p className="text-sm text-foreground">{displayNameValue}</p>
                       <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{user?.email}</p>
                     </div>
                     <div className="py-1.5">

@@ -7,10 +7,11 @@
  */
 export { ApiError, request } from "./client";
 export { register, login, logout, refresh } from "./auth";
-export { getMe, type User } from "./users";
+export { getMe, updateProfile, deleteAccount, type User } from "./users";
 export { listBoards, createBoard, updateBoard, deleteBoard } from "./boards";
 export { listLogs, createLog, updateLog, deleteLog, deleteAllLogs } from "./logs";
-export { listRuns, deleteAllRuns } from "./sessions";
+export { listRuns, getRunBreakdown, deleteAllRuns } from "./sessions";
+export type { SessionDetail, SessionDetailResult } from "./sessions";
 export {
   listQuizSettings,
   createQuizSettings,

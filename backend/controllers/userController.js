@@ -1,5 +1,6 @@
 const userService = require('../services/userService');
 const authService = require('../services/authService');
+const userRepository = require('../repositories/userRepository');
 const asyncHandler = require('../middleware/asyncHandler');
 
 /**
@@ -13,19 +14,35 @@ async function me(req, res) {
 }
 
 /**
- * PUT /users/me — update the authenticated user's email and/or password.
- * The password is hashed here before it ever reaches the service layer.
+ * PUT /users/me — update the authenticated user's name, email and/or
+ * password. Changing the password requires the current one; it is hashed here
+ * before it ever reaches the service layer.
  */
 async function update(req, res) {
-  const { email, password } = req.body;
-  if (!email && !password) {
-    return res.status(400).json({ error: 'Provide an email and/or password to update' });
+  const { name, email, password, currentPassword } = req.body;
+  if (name === undefined && !email && !password) {
+    return res.status(400).json({ error: 'Provide a name, email, and/or password to update' });
   }
   let passwordHash;
   if (password) {
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Current password is required to change your password' });
+    }
+    const user = await userRepository.findById(req.userId);
+    if (!user || !user.password_hash) {
+      return res.status(400).json({ error: 'Password changes require an existing password on the account' });
+    }
+    const valid = await authService.verifyPassword(currentPassword, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
     passwordHash = await authService.hashPassword(password);
   }
-  const user = await userService.update(req.userId, { email, passwordHash });
+  const user = await userService.update(req.userId, {
+    fullName: name,
+    email,
+    passwordHash,
+  });
   return res.status(200).json(user);
 }
 

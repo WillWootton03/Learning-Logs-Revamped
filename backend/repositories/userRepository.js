@@ -8,7 +8,7 @@ const pool = require('../db/pool');
  */
 async function findByEmail(email) {
   const result = await pool.query(
-    'SELECT user_id, email, password_hash, google_id FROM users WHERE email = $1',
+    'SELECT user_id, email, full_name, password_hash, google_id FROM users WHERE email = $1',
     [email]
   );
   return result.rows[0] || null;
@@ -21,7 +21,7 @@ async function findByEmail(email) {
  */
 async function findByGoogleId(googleId) {
   const result = await pool.query(
-    'SELECT user_id, email, password_hash, google_id FROM users WHERE google_id = $1',
+    'SELECT user_id, email, full_name, password_hash, google_id FROM users WHERE google_id = $1',
     [googleId]
   );
   return result.rows[0] || null;
@@ -34,7 +34,7 @@ async function findByGoogleId(googleId) {
  */
 async function findById(id) {
   const result = await pool.query(
-    'SELECT user_id, email, password_hash, google_id, created_at FROM users WHERE user_id = $1',
+    'SELECT user_id, email, full_name, password_hash, google_id, created_at FROM users WHERE user_id = $1',
     [id]
   );
   return result.rows[0] || null;
@@ -43,27 +43,31 @@ async function findById(id) {
 /**
  * Insert a new user. Email is unique, so a second insert with the same
  * email throws a Postgres 23505 duplicate-key error.
- * @param {{email: string, passwordHash: string|null, googleId: string|null}} data
+ * @param {{email: string, fullName: string|null, passwordHash: string|null, googleId: string|null}} data
  * @returns {Promise<number>} The new user's user_id.
  */
-async function create({ email, passwordHash, googleId }) {
+async function create({ email, fullName = null, passwordHash, googleId }) {
   const result = await pool.query(
-    'INSERT INTO users (email, password_hash, google_id) VALUES ($1, $2, $3) RETURNING user_id',
-    [email, passwordHash, googleId]
+    'INSERT INTO users (email, full_name, password_hash, google_id) VALUES ($1, $2, $3, $4) RETURNING user_id',
+    [email, fullName, passwordHash, googleId]
   );
   return result.rows[0].user_id;
 }
 
 /**
  * Update a user. Builds the SET clause from whichever fields are provided,
- * so an update can change only the email or only the password.
+ * so an update can change only the name, only the email, or only the password.
  * @param {number|string} id - User id.
- * @param {{email?: string, passwordHash?: string}} changes
+ * @param {{fullName?: string|null, email?: string, passwordHash?: string}} changes
  * @returns {Promise<number|null>} Updated user_id, or null if no fields/row.
  */
-async function update(id, { email, passwordHash }) {
+async function update(id, { fullName, email, passwordHash }) {
   const sets = [];
   const values = [];
+  if (fullName !== undefined) {
+    sets.push(`full_name = $${sets.length + 1}`);
+    values.push(fullName);
+  }
   if (email !== undefined) {
     sets.push(`email = $${sets.length + 1}`);
     values.push(email);
@@ -83,15 +87,21 @@ async function update(id, { email, passwordHash }) {
 
 /**
  * Attach a Google id to an existing account (used when a Google login
- * matches an email that was previously registered with a password).
+ * matches an email that was previously registered with a password). Also
+ * back-fills the display name from Google's profile when the account has none.
  * @param {number|string} id - User id.
  * @param {string} googleId - Google's `sub` claim.
+ * @param {string|null} [fullName] - Google's profile name, stored if unset.
  * @returns {Promise<number|null>} Updated user_id, or null if no row.
  */
-async function linkGoogleId(id, googleId) {
+async function linkGoogleId(id, googleId, fullName = null) {
   const result = await pool.query(
-    'UPDATE users SET google_id = $1 WHERE user_id = $2 RETURNING user_id',
-    [googleId, id]
+    `UPDATE users
+     SET google_id = $1,
+         full_name = CASE WHEN full_name IS NULL AND $3::text IS NOT NULL THEN $3 ELSE full_name END
+     WHERE user_id = $2
+     RETURNING user_id`,
+    [googleId, id, fullName]
   );
   return result.rows[0] || null;
 }

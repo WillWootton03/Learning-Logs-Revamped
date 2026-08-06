@@ -141,16 +141,19 @@ async function loginWithGoogle(idToken) {
   const payload = ticket.getPayload();
   const email = payload.email;
   const googleId = payload.sub;
+  // Google's profile name (may be absent) — used to pre-fill the display name.
+  const fullName = typeof payload.name === 'string' ? payload.name : null;
 
   let user = await userRepository.findByGoogleId(googleId);
   if (!user) {
     user = await userRepository.findByEmail(email);
     if (user) {
-      const userId = await userRepository.linkGoogleId(user.user_id, googleId);
+      const userId = await userRepository.linkGoogleId(user.user_id, googleId, fullName);
       return userId;
     }
     return userRepository.create({
       email,
+      fullName,
       passwordHash: null,
       googleId,
     });

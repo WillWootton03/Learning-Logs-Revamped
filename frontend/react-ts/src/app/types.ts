@@ -41,14 +41,14 @@ export type SessionPreset = {
   tagIds: string[] | null;
   /**
    * Tag filter mode. false (default) = a concept with ANY selected tag
-   * qualifies; true = it must carry EVERY selected tag. Frontend-only state,
-   * passed along when the session's questions are generated.
+   * qualifies; true = it must carry EVERY selected tag. Persisted on the
+   * setting and read back into presets / run breakdowns.
    */
   matchAllTags: boolean;
   /**
    * Answer matching mode for fill-in questions. false (default) = lenient
    * (minor typos still count); true = exact after trim/lowercase, no typo
-   * tolerance. Frontend-only state, sent to the server when the run records.
+   * tolerance. Persisted on the setting and read back into presets.
    */
   exactMatching: boolean;
 };

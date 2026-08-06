@@ -57,6 +57,93 @@ export async function listRuns(boardId: string) {
   });
 }
 
+// ── Run breakdown (session detail) ─────────────────────────────────────────
+
+type BreakdownRunRow = {
+  quiz_id: string;
+  quiz_settings_id: string | null;
+  questions_count: number;
+  /** BIGINT — pg returns it as a string. */
+  time_elapsed_ms: string;
+  correct_count: number;
+  created_at: string;
+  settings_name: string | null;
+  include_known: boolean | null;
+  exact_matching: boolean | null;
+  match_all_tags: boolean | null;
+  /** Resolved tag-filter names (empty for a one-off run or an unfiltered preset). */
+  tag_names: string[];
+};
+
+/** One reviewed concept within a run. */
+export type SessionDetailResult = {
+  conceptId: string;
+  /** The concept's prompt as it was when the run was recorded. */
+  title: string;
+  answer: string;
+  hint: string | null;
+  tags: string[];
+  correct: boolean;
+};
+
+/** Full detail for one session: summary + per-question results. */
+export type SessionDetail = Omit<SessionRecord, "results"> & {
+  /** Setting id this run was created from (null for one-off quizzes). */
+  settingsId: string | null;
+  /** Whether exact (vs lenient) answer matching was active for fill-in questions. */
+  exactMatching: boolean;
+  /** Whether the tag filter required every selected tag (vs any). */
+  matchAllTags: boolean;
+  results: SessionDetailResult[];
+};
+
+/**
+ * Fetch one run's full breakdown, mapping the backend rows onto the session
+ * model the board pages already use. `includeKnown`/`allowedTags` come from
+ * the linked setting (a one-off run falls back to unfiltered defaults).
+ */
+export async function getRunBreakdown(boardId: string, quizId: string): Promise<SessionDetail> {
+  const res = await request<{ run: BreakdownRunRow; questions: BreakdownQuestionRow[] }>(
+    `/boards/${boardId}/quizzes/${quizId}`
+  );
+  const run = res.run;
+  const timeElapsedMs = Number(run.time_elapsed_ms);
+  return {
+    id: run.quiz_id,
+    boardId,
+    settingsId: run.quiz_settings_id,
+    presetName: run.settings_name ?? "One-off quiz",
+    includeKnown: run.include_known ?? false,
+    allowedTags: run.tag_names.length > 0 ? run.tag_names : null,
+    conceptsStudied: run.questions_count,
+    correctCount: run.correct_count,
+    duration: formatDuration(timeElapsedMs),
+    timeElapsedMs,
+    date: formatSessionDate(run.created_at),
+    exactMatching: run.exact_matching ?? false,
+    matchAllTags: run.match_all_tags ?? false,
+    results: res.questions.map((q) => ({
+      conceptId: q.concept_id,
+      title: q.prompt,
+      answer: q.answer,
+      hint: q.hint,
+      tags: q.tags,
+      correct: q.answered_correctly,
+    })),
+  };
+}
+
+type BreakdownQuestionRow = {
+  quiz_question_id: string;
+  position: number;
+  answered_correctly: boolean;
+  concept_id: string;
+  prompt: string;
+  answer: string;
+  hint: string | null;
+  tags: string[];
+};
+
 /** Delete every quiz run (session history) on a board. */
 export function deleteAllRuns(boardId: string) {
   return request<{ deleted: number }>(`/boards/${boardId}/quizzes`, {

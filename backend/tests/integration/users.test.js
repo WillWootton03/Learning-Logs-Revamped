@@ -63,9 +63,12 @@ describe('PUT /users/me', () => {
     expect(res.body.email).toBe('new@example.com');
   });
 
-  it('updates the password, and the new password works for login', async () => {
+  it('updates the password when the current password is provided, and the new password works for login', async () => {
     const agent = await registerUser();
-    await agent.put('/users/me').send({ password: 'new-password-123' }).expect(200);
+    await agent
+      .put('/users/me')
+      .send({ password: 'new-password-123', currentPassword: VALID_USER.password })
+      .expect(200);
 
     // The real bcrypt round-trip: new password authenticates...
     const login = await request(app)
@@ -78,6 +81,34 @@ describe('PUT /users/me', () => {
       .post('/auth/login')
       .send({ email: VALID_USER.email, password: VALID_USER.password });
     expect(oldLogin.status).toBe(401);
+  });
+
+  it('rejects a password change without the current password', async () => {
+    const agent = await registerUser();
+
+    const res = await agent.put('/users/me').send({ password: 'new-password-123' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a password change when the current password is wrong', async () => {
+    const agent = await registerUser();
+
+    const res = await agent
+      .put('/users/me')
+      .send({ password: 'new-password-123', currentPassword: 'wrong-current' });
+    expect(res.status).toBe(401);
+  });
+
+  it('updates the full name and returns it on GET /users/me', async () => {
+    const agent = await registerUser();
+
+    const res = await agent.put('/users/me').send({ name: 'Ada Lovelace' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.full_name).toBe('Ada Lovelace');
+
+    const me = await agent.get('/users/me');
+    expect(me.body.full_name).toBe('Ada Lovelace');
   });
 
   it('rejects with 400 when nothing is provided', async () => {

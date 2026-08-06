@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { Search, LayoutGrid, Flame, Plus } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useAuth } from "../context/AuthContext";
-import { displayNameFromEmail } from "../lib/userName";
+import { displayName } from "../lib/userName";
 import { BoardCard } from "../components/BoardCard";
 import { ActivityLog, type ActivityEntry } from "../components/ActivityLog";
 
@@ -24,7 +24,7 @@ export function Dashboard() {
   const { boards, isBoardsLoading, boardsError, reloadBoards } = useBoard();
   const { user } = useAuth();
 
-  const name = displayNameFromEmail(user?.email);
+  const name = displayName(user?.fullName, user?.email);
 
   if (isBoardsLoading) {
     return (

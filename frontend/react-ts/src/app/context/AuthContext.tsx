@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
+  deleteAccount as apiDeleteAccount,
   getMe,
   login as apiLogin,
   logout as apiLogout,
   refresh as apiRefresh,
   register as apiRegister,
+  updateProfile as apiUpdateProfile,
   type User,
 } from "../lib/api";
 
@@ -18,6 +20,15 @@ type AuthState = {
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Persist profile changes (name/email/password) and refresh local state. */
+  updateProfile: (data: {
+    name?: string;
+    email?: string;
+    password?: string;
+    currentPassword?: string;
+  }) => Promise<void>;
+  /** Permanently delete the account (used by the settings danger zone). */
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -79,6 +90,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await getMe());
   }
 
+  async function updateProfile(data: {
+    name?: string;
+    email?: string;
+    password?: string;
+    currentPassword?: string;
+  }) {
+    const updated = await apiUpdateProfile(data);
+    setUser(updated);
+  }
+
+  async function deleteAccount() {
+    await apiDeleteAccount();
+    setUser(null);
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -89,6 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refresh,
+        updateProfile,
+        deleteAccount,
       }}
     >
       {children}

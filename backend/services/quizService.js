@@ -325,7 +325,9 @@ async function removeAll(userId, boardId) {
 }
 
 /**
- * Fetch a run summary plus its per-question breakdown.
+ * Fetch a run summary plus its per-question breakdown. When the run was
+ * created from a saved setting, also resolves that setting's tag filter to
+ * names so the client can display it without extra calls.
  * @param {string} userId
  * @param {string} boardId
  * @param {string} quizId
@@ -336,6 +338,15 @@ async function getRunBreakdown(userId, boardId, quizId) {
   const run = await quizRepository.findRunById(userId, boardId, quizId);
   if (!run) throw new AppError(404, 'Quiz not found');
   const questions = await quizRepository.findQuestionsByRunId(userId, boardId, quizId);
+  let tagNames = [];
+  if (run.quiz_settings_id) {
+    const tagIds = await quizSettingsRepository.findTagIds(userId, boardId, run.quiz_settings_id);
+    if (tagIds.length > 0) {
+      const tags = await tagRepository.findByIds(userId, boardId, tagIds);
+      tagNames = tags.map((t) => t.name);
+    }
+  }
+  run.tag_names = tagNames;
   return { run, questions };
 }
 

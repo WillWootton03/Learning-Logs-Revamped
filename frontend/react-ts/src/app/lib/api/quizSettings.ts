@@ -15,6 +15,7 @@ type SettingsRow = {
   style: QuizStyle;
   include_known: boolean;
   exact_matching: boolean;
+  match_all_tags: boolean;
   tag_ids: string[];
 };
 
@@ -25,9 +26,9 @@ function toPreset(row: SettingsRow): SessionPreset {
     style: row.style,
     includeKnown: row.include_known,
     tagIds: row.tag_ids.length > 0 ? row.tag_ids : null,
-    // Match-all tag mode is frontend-only state (not persisted server-side),
-    // so presets restored from the backend default to the inclusive "any" mode.
-    matchAllTags: false,
+    // Both answer-matching and tag match-all modes are persisted server-side,
+    // so presets restored from the backend carry the exact modes that were set.
+    matchAllTags: row.match_all_tags,
     exactMatching: row.exact_matching,
   };
 }
@@ -39,7 +40,7 @@ export async function listQuizSettings(boardId: string) {
 
 export function createQuizSettings(
   boardId: string,
-  data: { name: string; style: QuizStyle; includeKnown: boolean; exactMatching: boolean; tagIds: string[] }
+  data: { name: string; style: QuizStyle; includeKnown: boolean; exactMatching: boolean; matchAllTags: boolean; tagIds: string[] }
 ) {
   return request<SettingsRow>(`/boards/${boardId}/quiz-settings`, {
     method: "POST",
@@ -48,16 +49,17 @@ export function createQuizSettings(
       style: data.style,
       includeKnown: data.includeKnown,
       exactMatching: data.exactMatching,
+      matchAllTags: data.matchAllTags,
       tagIds: data.tagIds,
     }),
   }).then(toPreset);
 }
 
-/** Update a setting's name/style/include-known/exact-matching. Tags are managed separately. */
+/** Update a setting's name/style/include-known/exact-matching/match-all. Tags are managed separately. */
 export function updateQuizSettings(
   boardId: string,
   settingsId: string,
-  data: { name?: string; style?: QuizStyle; includeKnown?: boolean; exactMatching?: boolean }
+  data: { name?: string; style?: QuizStyle; includeKnown?: boolean; exactMatching?: boolean; matchAllTags?: boolean }
 ) {
   return request<SettingsRow>(`/boards/${boardId}/quiz-settings/${settingsId}`, {
     method: "PUT",

@@ -35,8 +35,14 @@ describe('userService.getById', () => {
     const result = await userService.getById('user-1');
 
     // Only the safe fields survive; hash and google_id must never leave the
-    // API.
-    expect(result).toEqual({ user_id: 'user-1', email: 'ada@example.com' });
+    // API. The profile fields are included so the profile/settings pages can
+    // show the display name and join date.
+    expect(result).toEqual({
+      user_id: 'user-1',
+      email: 'ada@example.com',
+      full_name: null,
+      created_at: RAW_USER.created_at,
+    });
     expect(result.password_hash).toBeUndefined();
     // And the id is forwarded unchanged (it's a UUID string, not a number).
     expect(userRepository.findById).toHaveBeenCalledWith('user-1');
@@ -68,11 +74,16 @@ describe('userService.create', () => {
       googleId: null,
     });
 
-    expect(result).toEqual({ user_id: 'user-1', email: 'ada@example.com' });
+    expect(result).toEqual({
+      user_id: 'user-1',
+      email: 'ada@example.com',
+      full_name: null,
+    });
     // The hash and googleId are passed TO the repository (for storage) but the
-    // response is stripped.
+    // response is stripped. No display name was provided, so it stays null.
     expect(userRepository.create).toHaveBeenCalledWith({
       email: 'ada@example.com',
+      fullName: null,
       passwordHash: 'hashed-password',
       googleId: null,
     });
@@ -113,10 +124,16 @@ describe('userService.update', () => {
 
     const result = await userService.update('user-1', { email: 'new@example.com' });
 
-    expect(result).toEqual({ user_id: 'user-1', email: 'new@example.com' });
-    // Partial update: only the email is sent; undefined passwordHash is
-    // dropped by the repository's dynamic SET builder.
+    expect(result).toEqual({
+      user_id: 'user-1',
+      email: 'new@example.com',
+      full_name: null,
+      created_at: RAW_USER.created_at,
+    });
+    // Partial update: only the email is sent; undefined fullName/passwordHash
+    // are dropped by the repository's dynamic SET builder.
     expect(userRepository.update).toHaveBeenCalledWith('user-1', {
+      fullName: undefined,
       email: 'new@example.com',
       passwordHash: undefined,
     });
@@ -125,6 +142,25 @@ describe('userService.update', () => {
   it('rejects with 400 for a malformed email', async () => {
     await expect(userService.update('user-1', { email: 'nope' })).rejects.toMatchObject({
       status: 400,
+    });
+  });
+
+  it('updates the full name and returns the refreshed safe user', async () => {
+    userRepository.update.mockResolvedValue({ user_id: 'user-1' });
+    userRepository.findById.mockResolvedValue({ ...RAW_USER, full_name: 'Ada Lovelace' });
+
+    const result = await userService.update('user-1', { fullName: 'Ada Lovelace' });
+
+    expect(result).toEqual({
+      user_id: 'user-1',
+      email: 'ada@example.com',
+      full_name: 'Ada Lovelace',
+      created_at: RAW_USER.created_at,
+    });
+    expect(userRepository.update).toHaveBeenCalledWith('user-1', {
+      fullName: 'Ada Lovelace',
+      email: undefined,
+      passwordHash: undefined,
     });
   });
 
@@ -150,6 +186,8 @@ describe('userService.update', () => {
     await expect(userService.update('user-1', { email: 'ada@example.com' })).resolves.toEqual({
       user_id: 'user-1',
       email: 'ada@example.com',
+      full_name: null,
+      created_at: RAW_USER.created_at,
     });
   });
 

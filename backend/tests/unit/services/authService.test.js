@@ -322,7 +322,7 @@ describe('authService.loginWithGoogle', () => {
     userRepository.linkGoogleId.mockResolvedValue('user-2');
 
     await expect(authService.loginWithGoogle('id-token')).resolves.toBe('user-2');
-    expect(userRepository.linkGoogleId).toHaveBeenCalledWith('user-2', 'google-sub-1');
+    expect(userRepository.linkGoogleId).toHaveBeenCalledWith('user-2', 'google-sub-1', null);
   });
 
   it('creates a new account for a brand-new google user', async () => {
@@ -335,6 +335,7 @@ describe('authService.loginWithGoogle', () => {
     await expect(authService.loginWithGoogle('id-token')).resolves.toBe('user-3');
     expect(userRepository.create).toHaveBeenCalledWith({
       email: 'google@example.com',
+      fullName: null,
       passwordHash: null,
       googleId: 'google-sub-1',
     });

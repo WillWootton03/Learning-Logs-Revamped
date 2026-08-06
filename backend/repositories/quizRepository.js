@@ -1,13 +1,13 @@
 const pool = require('../db/pool');
 const AppError = require('../services/AppError');
 
-// Summary columns for list/create; detail (get-by-id) additionally returns
-// board_id. The quiz table has no updated_at and created_at is never part of
-// detail columns, so the detail row has no timestamp.
+// Summary columns for list; detail (get-by-id) additionally returns board_id,
+// created_at, and the linked setting's fields. The quiz table has no
+// updated_at, so the detail row's timestamp is created_at.
 const RUN_LIST_COLUMNS =
   'q.quiz_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count, q.created_at';
 const RUN_COLUMNS =
-  'q.quiz_id, q.board_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count';
+  'q.quiz_id, q.board_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count, q.created_at';
 
 /**
  * Fetch the concepts eligible for a quiz on a board: optionally filtered to a
@@ -160,7 +160,8 @@ async function findRunsBySettings(userId, boardId, quizSettingsId) {
 }
 
 /**
- * Fetch a single run, verifying it belongs to the user's board.
+ * Fetch a single run, verifying it belongs to the user's board. Also pulls in
+ * the linked setting's name and flags so a run detail can show what was asked.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string} quizId - Run id (UUID).
@@ -168,7 +169,7 @@ async function findRunsBySettings(userId, boardId, quizSettingsId) {
  */
 async function findRunById(userId, boardId, quizId) {
   const result = await pool.query(
-    `SELECT ${RUN_COLUMNS}, qs.name AS settings_name
+    `SELECT ${RUN_COLUMNS}, qs.name AS settings_name, qs.include_known, qs.exact_matching, qs.match_all_tags
      FROM quiz q
      JOIN boards b ON b.board_id = q.board_id
      LEFT JOIN quiz_settings qs ON qs.quiz_settings_id = q.quiz_settings_id
@@ -180,7 +181,7 @@ async function findRunById(userId, boardId, quizId) {
 
 /**
  * Fetch the per-question results of a run in original ask order, including
- * the concept's prompt/answer/hint for the review breakdown.
+ * the concept's prompt/answer/hint and tag names for the review breakdown.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string} quizId - Run id (UUID).
@@ -189,12 +190,16 @@ async function findRunById(userId, boardId, quizId) {
 async function findQuestionsByRunId(userId, boardId, quizId) {
   const result = await pool.query(
     `SELECT qq.quiz_question_id, qq.position, qq.answered_correctly,
-            c.concept_id, c.prompt, c.answer, c.hint
+            c.concept_id, c.prompt, c.answer, c.hint,
+            COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.tag_id IS NOT NULL), '{}') AS tags
      FROM quiz_questions qq
      JOIN quiz q ON q.quiz_id = qq.quiz_id
      JOIN boards b ON b.board_id = q.board_id
      JOIN concepts c ON c.concept_id = qq.concept_id
+     LEFT JOIN concept_tags ct ON ct.concept_id = c.concept_id
+     LEFT JOIN tags t ON t.tag_id = ct.tag_id
      WHERE qq.quiz_id = $1 AND q.board_id = $2 AND b.user_id = $3
+     GROUP BY qq.quiz_question_id, qq.position, qq.answered_correctly, c.concept_id, c.prompt, c.answer, c.hint
      ORDER BY qq.position`,
     [quizId, boardId, userId]
   );

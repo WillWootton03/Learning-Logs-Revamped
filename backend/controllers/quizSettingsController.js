@@ -13,12 +13,13 @@ async function list(req, res) {
  * POST /boards/:boardId/quiz-settings — save quiz settings.
  */
 async function create(req, res) {
-  const { name, style, includeKnown, exactMatching, tagIds } = req.body;
+  const { name, style, includeKnown, exactMatching, matchAllTags, tagIds } = req.body;
   const setting = await quizSettingsService.create(req.userId, req.params.boardId, {
     name,
     style,
     includeKnown,
     exactMatching,
+    matchAllTags,
     tagIds,
   });
   return res.status(201).json(setting);
@@ -41,12 +42,12 @@ async function getById(req, res) {
  * fields. Tag filtering is managed via the /tags endpoints.
  */
 async function update(req, res) {
-  const { name, style, includeKnown, exactMatching } = req.body;
+  const { name, style, includeKnown, exactMatching, matchAllTags } = req.body;
   const setting = await quizSettingsService.update(
     req.userId,
     req.params.boardId,
     req.params.quizSettingsId,
-    { name, style, includeKnown, exactMatching }
+    { name, style, includeKnown, exactMatching, matchAllTags }
   );
   return res.status(200).json(setting);
 }

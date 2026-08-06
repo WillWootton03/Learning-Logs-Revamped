@@ -4,12 +4,14 @@ const pool = require('../db/pool');
 // no timestamps — those are redundant on a board-scoped list). All columns are
 // aliased through quiz_settings so they're unambiguous against the boards JOIN
 // (both tables have a `name` column).
-const SETTINGS_COLUMNS = 'qs.quiz_settings_id, qs.name, qs.style, qs.include_known, qs.exact_matching';
+const SETTINGS_COLUMNS =
+  'qs.quiz_settings_id, qs.name, qs.style, qs.include_known, qs.exact_matching, qs.match_all_tags';
 const DETAILED_SETTINGS_COLUMNS =
-  'qs.quiz_settings_id, qs.board_id, qs.name, qs.style, qs.include_known, qs.exact_matching, qs.updated_at';
+  'qs.quiz_settings_id, qs.board_id, qs.name, qs.style, qs.include_known, qs.exact_matching, qs.match_all_tags, qs.updated_at';
 // INSERT ... RETURNING has no FROM join, so the target table's columns are
 // referenced unqualified (the INSERT target has no alias).
-const INSERT_RETURNING_COLUMNS = 'quiz_settings_id, name, style, include_known, exact_matching';
+const INSERT_RETURNING_COLUMNS =
+  'quiz_settings_id, name, style, include_known, exact_matching, match_all_tags';
 
 /**
  * List all quiz settings on a board, verifying board ownership via JOIN.
@@ -51,17 +53,21 @@ async function findById(userId, boardId, quizSettingsId) {
  * Insert quiz settings. Only proceeds if the board belongs to the user.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
- * @param {{name: string, style: string, includeKnown: boolean, exactMatching: boolean}} data
+ * @param {{name: string, style: string, includeKnown: boolean, exactMatching: boolean, matchAllTags: boolean}} data
  * @returns {Promise<object|null>} Created settings row, or null if not owned.
  */
-async function create(userId, boardId, { name, style, includeKnown, exactMatching = false }) {
+async function create(
+  userId,
+  boardId,
+  { name, style, includeKnown, exactMatching = false, matchAllTags = false }
+) {
   const result = await pool.query(
-    `INSERT INTO quiz_settings (board_id, name, style, include_known, exact_matching)
-     SELECT $1, $2, $3, $4, $5
+    `INSERT INTO quiz_settings (board_id, name, style, include_known, exact_matching, match_all_tags)
+     SELECT $1, $2, $3, $4, $5, $6
      FROM boards b
-     WHERE b.board_id = $1 AND b.user_id = $6
+     WHERE b.board_id = $1 AND b.user_id = $7
      RETURNING ${INSERT_RETURNING_COLUMNS}`,
-    [boardId, name, style, includeKnown, exactMatching, userId]
+    [boardId, name, style, includeKnown, exactMatching, matchAllTags, userId]
   );
   return result.rows[0] || null;
 }
@@ -72,10 +78,15 @@ async function create(userId, boardId, { name, style, includeKnown, exactMatchin
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string} quizSettingsId - Settings id (UUID).
- * @param {{name?: string, style?: string, includeKnown?: boolean, exactMatching?: boolean}} changes
+ * @param {{name?: string, style?: string, includeKnown?: boolean, exactMatching?: boolean, matchAllTags?: boolean}} changes
  * @returns {Promise<object|null>} Updated settings row or null.
  */
-async function update(userId, boardId, quizSettingsId, { name, style, includeKnown, exactMatching }) {
+async function update(
+  userId,
+  boardId,
+  quizSettingsId,
+  { name, style, includeKnown, exactMatching, matchAllTags }
+) {
   // Identity params go first ($1 = quizSettingsId, $2 = boardId, $3 = userId)
   // so the WHERE clause positions are fixed; mutable fields follow in order.
   const values = [quizSettingsId, boardId, userId];
@@ -99,6 +110,11 @@ async function update(userId, boardId, quizSettingsId, { name, style, includeKno
   if (exactMatching !== undefined) {
     sets.push(`exact_matching = $${param}`);
     values.push(exactMatching);
+    param += 1;
+  }
+  if (matchAllTags !== undefined) {
+    sets.push(`match_all_tags = $${param}`);
+    values.push(matchAllTags);
     param += 1;
   }
   if (sets.length === 0) return null;
