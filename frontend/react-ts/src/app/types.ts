@@ -32,8 +32,11 @@ export type Concept = {
 export type SessionPreset = {
   id: string;
   name: string;
+  /** Quiz style this setting generates. New presets default to multiple_choice. */
+  style: "true_false" | "multiple_choice" | "fill_in";
   includeKnown: boolean;
-  allowedTags: string[] | null;
+  /** Tag ids the setting filters by; null means all tags on the board. */
+  tagIds: string[] | null;
 };
 
 export type ConceptResult = {

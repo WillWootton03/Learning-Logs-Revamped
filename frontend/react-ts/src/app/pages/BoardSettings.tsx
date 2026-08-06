@@ -130,9 +130,10 @@ export function BoardSettings() {
     try {
       let tag = boardTags.find((t) => t.name === trimmed);
       if (!tag) {
-        tag = await createTag(id!, trimmed);
-        setBoardTags((prev) => [...prev, tag]);
+        const created = await createTag(id!, trimmed);
+        setBoardTags((prev) => [...prev, created]);
         addTagToPool(id!, trimmed);
+        tag = created;
       }
       await linkTag(id!, conceptId, tag.tag_id);
       updateConceptTags(id!, conceptId, [...concept.tags, trimmed]);

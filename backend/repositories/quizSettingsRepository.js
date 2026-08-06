@@ -1,10 +1,15 @@
 const pool = require('../db/pool');
 
 // Detail queries return the full row; list queries stay lean (no board_id,
-// no timestamps — those are redundant on a board-scoped list).
-const SETTINGS_COLUMNS = 'quiz_settings_id, name, style, include_known';
+// no timestamps — those are redundant on a board-scoped list). All columns are
+// aliased through quiz_settings so they're unambiguous against the boards JOIN
+// (both tables have a `name` column).
+const SETTINGS_COLUMNS = 'qs.quiz_settings_id, qs.name, qs.style, qs.include_known';
 const DETAILED_SETTINGS_COLUMNS =
-  'quiz_settings_id, board_id, name, style, include_known, updated_at';
+  'qs.quiz_settings_id, qs.board_id, qs.name, qs.style, qs.include_known, qs.updated_at';
+// INSERT ... RETURNING has no FROM join, so the target table's columns are
+// referenced unqualified (the INSERT target has no alias).
+const INSERT_RETURNING_COLUMNS = 'quiz_settings_id, name, style, include_known';
 
 /**
  * List all quiz settings on a board, verifying board ownership via JOIN.
@@ -55,7 +60,7 @@ async function create(userId, boardId, { name, style, includeKnown }) {
      SELECT $1, $2, $3, $4
      FROM boards b
      WHERE b.board_id = $1 AND b.user_id = $5
-     RETURNING ${SETTINGS_COLUMNS}`,
+     RETURNING ${INSERT_RETURNING_COLUMNS}`,
     [boardId, name, style, includeKnown, userId]
   );
   return result.rows[0] || null;

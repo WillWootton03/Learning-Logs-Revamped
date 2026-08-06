@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { BarChart2, BookOpen, CalendarDays, CheckCircle2, ChevronRight, Clock, Flame, Plus } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useSessions } from "../context/SessionContext";
-import { ComingSoonModal } from "../components/ComingSoonModal";
+import { SessionModal } from "../components/SessionModal";
 import { BackButton } from "../components/BackButton";
 
 export function Sessions() {
@@ -169,11 +169,11 @@ export function Sessions() {
         </>
       )}
 
-      <ComingSoonModal
+      <SessionModal
+        boardId={id!}
         open={sessionOpen}
         onClose={() => setSessionOpen(false)}
-        title="Start session"
-        description="Quiz sessions run on the quiz engine. We'll wire this up next."
+        onStart={(presetId) => navigate(`/app/board/${id}/sessions/play?presetId=${presetId}`)}
       />
     </main>
   );

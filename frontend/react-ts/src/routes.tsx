@@ -8,6 +8,7 @@ import { AllConcepts } from "./app/pages/AllConcepts";
 import { AllTags } from "./app/pages/AllTags";
 import { Sessions } from "./app/pages/Sessions";
 import { SessionDetail } from "./app/pages/SessionDetail";
+import { SessionPlay } from "./app/pages/SessionPlay";
 import { Logs } from "./app/pages/Logs";
 import { NewBoard } from "./app/pages/NewBoard";
 import { UserSettings } from "./app/pages/UserSettings";
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
       { path: "board/:id/concepts", Component: AllConcepts },
       { path: "board/:id/tags", Component: AllTags },
       { path: "board/:id/sessions", Component: Sessions },
+      { path: "board/:id/sessions/play", Component: SessionPlay },
       { path: "board/:id/sessions/:sessionId", Component: SessionDetail },
       { path: "board/:id/logs", Component: Logs },
       { path: "board/:id/concept/:conceptId", Component: ConceptDetail },

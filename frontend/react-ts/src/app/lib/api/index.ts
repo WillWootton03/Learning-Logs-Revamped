@@ -11,4 +11,14 @@ export { getMe, type User } from "./users";
 export { listBoards, createBoard, updateBoard, deleteBoard } from "./boards";
 export { listLogs, createLog, updateLog, deleteLog } from "./logs";
 export { listRuns } from "./sessions";
+export {
+  listQuizSettings,
+  createQuizSettings,
+  updateQuizSettings,
+  deleteQuizSettings,
+  addQuizSettingsTags,
+  removeQuizSettingsTags,
+} from "./quizSettings";
+export { generateQuestions, recordRun, recordRunFromSettings } from "./quizzes";
+export type { QuizStyle, QuizQuestion, QuizAnswer, QuizScoredResult } from "./quizzes";
 export { listConcepts, createConcept, updateConcept, setConceptLearned, deleteConcept, listTags, createTag, linkTag, createTags, linkTags, getConcept, listConceptTags, unlinkTag, updateTag, deleteTag } from "./concepts";

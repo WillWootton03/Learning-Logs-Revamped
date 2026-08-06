@@ -16,6 +16,7 @@ import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { AddConceptModal } from "../components/AddConceptModal";
 import { ComingSoonModal } from "../components/ComingSoonModal";
+import { SessionModal } from "../components/SessionModal";
 import { BackButton } from "../components/BackButton";
 
 export function BoardDetail() {
@@ -229,11 +230,11 @@ export function BoardDetail() {
       </main>
 
       <AddConceptModal boardId={id!} open={addConceptOpen} onClose={() => setAddConceptOpen(false)} />
-      <ComingSoonModal
+      <SessionModal
+        boardId={id!}
         open={sessionOpen}
         onClose={() => setSessionOpen(false)}
-        title="Start session"
-        description="Quiz sessions run on the quiz engine. We'll wire this up next."
+        onStart={(presetId) => navigate(`/app/board/${id}/sessions/play?presetId=${presetId}`)}
       />
       <ComingSoonModal
         open={csvOpen}
