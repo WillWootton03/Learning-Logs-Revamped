@@ -1,14 +1,15 @@
 const pool = require('../db/pool');
 
 /**
- * Look up a user by email. Used by password login and duplicate checks.
- * Includes password_hash so the caller can verify credentials.
+ * Look up a user by email. Used by password login, Google linking, and
+ * duplicate checks. Includes password_hash so auth flows can verify
+ * credentials, plus password_it for token versioning.
  * @param {string} email
  * @returns {Promise<object|null>} User row or null.
  */
 async function findByEmail(email) {
   const result = await pool.query(
-    'SELECT user_id, email, full_name, password_hash, google_id FROM users WHERE email = $1',
+    'SELECT user_id, email, full_name, password_hash, google_id, email_verified, password_it FROM users WHERE email = $1',
     [email]
   );
   return result.rows[0] || null;
@@ -21,7 +22,7 @@ async function findByEmail(email) {
  */
 async function findByGoogleId(googleId) {
   const result = await pool.query(
-    'SELECT user_id, email, full_name, password_hash, google_id FROM users WHERE google_id = $1',
+    'SELECT user_id, email, full_name, password_hash, google_id, email_verified, password_it FROM users WHERE google_id = $1',
     [googleId]
   );
   return result.rows[0] || null;
@@ -34,7 +35,7 @@ async function findByGoogleId(googleId) {
  */
 async function findById(id) {
   const result = await pool.query(
-    'SELECT user_id, email, full_name, password_hash, google_id, created_at FROM users WHERE user_id = $1',
+    'SELECT user_id, email, full_name, password_hash, google_id, email_verified, password_it, created_at FROM users WHERE user_id = $1',
     [id]
   );
   return result.rows[0] || null;
@@ -55,13 +56,17 @@ async function create({ email, fullName = null, passwordHash, googleId }) {
 }
 
 /**
- * Update a user. Builds the SET clause from whichever fields are provided,
- * so an update can change only the name, only the email, or only the password.
+ * Update a user's profile fields. Builds the SET clause from whichever
+ * fields are provided, so an update can change only the name or only the
+ * email. Changing the email also resets verification: the new address must be
+ * confirmed with a fresh code before it can be used to log in again.
+ * Password changes are intentionally NOT handled here — they go through
+ * updatePassword() so credential writes stay on their own code path.
  * @param {number|string} id - User id.
- * @param {{fullName?: string|null, email?: string, passwordHash?: string}} changes
+ * @param {{fullName?: string|null, email?: string}} changes
  * @returns {Promise<number|null>} Updated user_id, or null if no fields/row.
  */
-async function update(id, { fullName, email, passwordHash }) {
+async function update(id, { fullName, email }) {
   const sets = [];
   const values = [];
   if (fullName !== undefined) {
@@ -71,10 +76,9 @@ async function update(id, { fullName, email, passwordHash }) {
   if (email !== undefined) {
     sets.push(`email = $${sets.length + 1}`);
     values.push(email);
-  }
-  if (passwordHash !== undefined) {
-    sets.push(`password_hash = $${sets.length + 1}`);
-    values.push(passwordHash);
+    // A new email means the address has never been confirmed — unverify it so
+    // the login gate re-engages until the fresh code is validated.
+    sets.push('email_verified = false');
   }
   if (sets.length === 0) return null;
   values.push(id);
@@ -83,6 +87,34 @@ async function update(id, { fullName, email, passwordHash }) {
     values
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Replace the user's password hash. Dedicated query for credential writes
+ * (change-password + password-reset flows); never mixed into profile updates.
+ * Bumps password_it so every token minted against the old version is revoked.
+ * @param {number|string} id - User id.
+ * @param {string} passwordHash - bcrypt hash of the new password.
+ * @returns {Promise<object|null>} Row { user_id, password_it } (the incremented
+ *   version), or null if no row.
+ */
+async function updatePassword(id, passwordHash) {
+  const result = await pool.query(
+    `UPDATE users SET password_hash = $2, password_it = password_it + 1
+     WHERE user_id = $1 RETURNING user_id, password_it`,
+    [id, passwordHash]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Mark a user's email as verified. This is the only verification-related
+ * write — tokens themselves are stateless and are never stored.
+ * @param {number|string} id - User id.
+ * @returns {Promise<void>}
+ */
+async function setEmailVerified(id) {
+  await pool.query('UPDATE users SET email_verified = true WHERE user_id = $1', [id]);
 }
 
 /**
@@ -122,6 +154,8 @@ module.exports = {
   findById,
   create,
   update,
+  updatePassword,
   remove,
   linkGoogleId,
+  setEmailVerified,
 };

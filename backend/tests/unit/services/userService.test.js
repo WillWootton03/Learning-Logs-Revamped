@@ -23,8 +23,10 @@ jest.mock('../../../repositories/userRepository');
 const RAW_USER = {
   user_id: 'user-1',
   email: 'ada@example.com',
+  full_name: null,
   password_hash: 'hashed-password',
   google_id: null,
+  email_verified: true,
   created_at: new Date().toISOString(),
 };
 
@@ -41,6 +43,7 @@ describe('userService.getById', () => {
       user_id: 'user-1',
       email: 'ada@example.com',
       full_name: null,
+      email_verified: true,
       created_at: RAW_USER.created_at,
     });
     expect(result.password_hash).toBeUndefined();
@@ -128,14 +131,14 @@ describe('userService.update', () => {
       user_id: 'user-1',
       email: 'new@example.com',
       full_name: null,
+      email_verified: true,
       created_at: RAW_USER.created_at,
     });
-    // Partial update: only the email is sent; undefined fullName/passwordHash
-    // are dropped by the repository's dynamic SET builder.
+    // Partial update: only the email is sent; undefined fullName is dropped
+    // by the repository's dynamic SET builder.
     expect(userRepository.update).toHaveBeenCalledWith('user-1', {
       fullName: undefined,
       email: 'new@example.com',
-      passwordHash: undefined,
     });
   });
 
@@ -155,12 +158,12 @@ describe('userService.update', () => {
       user_id: 'user-1',
       email: 'ada@example.com',
       full_name: 'Ada Lovelace',
+      email_verified: true,
       created_at: RAW_USER.created_at,
     });
     expect(userRepository.update).toHaveBeenCalledWith('user-1', {
       fullName: 'Ada Lovelace',
       email: undefined,
-      passwordHash: undefined,
     });
   });
 
@@ -187,6 +190,7 @@ describe('userService.update', () => {
       user_id: 'user-1',
       email: 'ada@example.com',
       full_name: null,
+      email_verified: true,
       created_at: RAW_USER.created_at,
     });
   });

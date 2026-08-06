@@ -16,6 +16,9 @@ import { BoardSettings } from "./app/pages/BoardSettings";
 import { Profile } from "./app/pages/Profile";
 import { Login } from "./app/pages/Login";
 import { Signup } from "./app/pages/Signup";
+import { Verify } from "./app/pages/Verify";
+import { ForgotPassword } from "./app/pages/ForgotPassword";
+import { ResetPassword } from "./app/pages/ResetPassword";
 
 export const router = createBrowserRouter([
   { path: "/", Component: Landing },
@@ -40,4 +43,7 @@ export const router = createBrowserRouter([
   },
   { path: "/login", Component: Login },
   { path: "/signup", Component: Signup },
+  { path: "/verify", Component: Verify },
+  { path: "/forgot-password", Component: ForgotPassword },
+  { path: "/reset-password", Component: ResetPassword },
 ]);

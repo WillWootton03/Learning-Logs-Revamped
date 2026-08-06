@@ -37,12 +37,15 @@ function verifyPassword(plaintext, hash) {
  * Sign a single access token (1h). Used by the refresh route, which mints
  * only an access token — the long-lived refresh token is static and is never
  * rotated. Each token carries a unique jwtid so every refresh produces a
- * genuinely new token string, even within the same second.
+ * genuinely new token string, even within the same second. Both tokens embed
+ * the user's password_it at issuance: if the password changes the version
+ * bumps and every older token is rejected by the middleware/refresh route.
  * @param {string} userId - Database id to embed in the token.
+ * @param {number} passwordIt - The user's current password_it.
  * @returns {string} Signed access token.
  */
-function signAccessToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET, {
+function signAccessToken(userId, passwordIt) {
+  return jwt.sign({ userId, passwordIt }, process.env.JWT_ACCESS_SECRET, {
     expiresIn: ACCESS_TTL,
     jwtid: randomUUID(),
   });
@@ -54,12 +57,14 @@ function signAccessToken(userId) {
  * exactly once here and is static thereafter; only access tokens get minted
  * again (by signAccessToken on /auth/refresh).
  * Uses separate secrets so a leaked access token can't mint refresh tokens.
+ * Both tokens embed passwordIt so a password change revokes them.
  * @param {string} userId - Database id to embed in both tokens.
+ * @param {number} passwordIt - The user's current password_it.
  * @returns {{accessToken: string, refreshToken: string}}
  */
-function signTokens(userId) {
-  const accessToken = signAccessToken(userId);
-  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
+function signTokens(userId, passwordIt) {
+  const accessToken = signAccessToken(userId, passwordIt);
+  const refreshToken = jwt.sign({ userId, passwordIt }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: REFRESH_TTL,
     jwtid: randomUUID(),
   });
@@ -85,11 +90,14 @@ function verifyRefreshToken(token) {
 }
 
 /**
- * Authenticate with email + password and return the user's id.
+ * Authenticate with email + password and return the user row.
  * Throws 401 for unknown users, Google-only accounts, or a bad password.
+ * The caller decides what to do about an unverified email (issue a code and
+ * refuse to sign the user in).
  * @param {string} email
  * @param {string} password
- * @returns {Promise<number>} The authenticated user's user_id.
+ * @returns {Promise<object>} The authenticated user's row (full record,
+ *   including password_hash for verification and password_it for tokens).
  */
 async function loginWithPassword(email, password) {
   const user = await userRepository.findByEmail(email);
@@ -100,7 +108,7 @@ async function loginWithPassword(email, password) {
   if (!valid) {
     throw new AppError(401, 'Invalid credentials');
   }
-  return user.user_id;
+  return user;
 }
 
 /**
@@ -129,9 +137,10 @@ async function exchangeGoogleCode(code) {
 
 /**
  * Verify a Google id_token and resolve it to a local user, creating or
- * linking an account as needed (upsert on email or google_id).
+ * linking an account as needed (upsert on email or google_id). Returns the
+ * full user row so the caller can check email_verified.
  * @param {string} idToken - Google id_token from the OAuth callback.
- * @returns {Promise<number>} The local user's user_id.
+ * @returns {Promise<object>} The local user's row (full record).
  */
 async function loginWithGoogle(idToken) {
   const ticket = await googleClient.verifyIdToken({
@@ -149,16 +158,19 @@ async function loginWithGoogle(idToken) {
     user = await userRepository.findByEmail(email);
     if (user) {
       const userId = await userRepository.linkGoogleId(user.user_id, googleId, fullName);
-      return userId;
+      user = await userRepository.findById(userId);
+      return user;
     }
-    return userRepository.create({
+    const userId = await userRepository.create({
       email,
       fullName,
       passwordHash: null,
       googleId,
     });
+    user = await userRepository.findById(userId);
+    return user;
   }
-  return user.user_id;
+  return user;
 }
 
 module.exports = {

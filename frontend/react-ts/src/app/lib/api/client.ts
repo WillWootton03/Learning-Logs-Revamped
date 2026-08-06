@@ -18,10 +18,16 @@
 
 export class ApiError extends Error {
   status: number;
+  /** Optional machine-readable code (e.g. "EMAIL_NOT_VERIFIED") from the backend. */
+  code?: string;
+  /** Optional email carried on auth failures (e.g. an unverified login). */
+  email?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string, email?: string) {
     super(message);
     this.status = status;
+    this.code = code;
+    this.email = email;
   }
 }
 
@@ -82,13 +88,17 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
   if (!res.ok) {
     let message = "Something went wrong";
+    let code: string | undefined;
+    let email: string | undefined;
     try {
       const body = await res.json();
       if (body?.error) message = body.error;
+      if (typeof body?.code === "string") code = body.code;
+      if (typeof body?.email === "string") email = body.email;
     } catch {
       // Non-JSON error body; keep the fallback message.
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, code, email);
   }
 
   if (res.status === 204) return undefined as T;

@@ -99,7 +99,7 @@ describe('authService.signTokens', () => {
     // depending on real JWT output.
     jwt.sign.mockImplementation((payload, secret, opts) => `token:${payload.userId}:${opts.expiresIn}`);
 
-    const { accessToken, refreshToken } = authService.signTokens('user-1');
+    const { accessToken, refreshToken } = authService.signTokens('user-1', 1);
 
     // Sanity-check the returned tokens encode the user id and correct TTLs.
     expect(accessToken).toBe('token:user-1:1h');
@@ -108,13 +108,14 @@ describe('authService.signTokens', () => {
     // a leaked access token can't be used to mint refresh tokens.
     // jwtid is a random id that makes each token unique; expect.any(String)
     // checks the option exists without pinning a specific value.
+    // Both tokens embed passwordIt so a password change revokes them.
     expect(jwt.sign).toHaveBeenCalledWith(
-      { userId: 'user-1' },
+      { userId: 'user-1', passwordIt: 1 },
       process.env.JWT_ACCESS_SECRET,
       { expiresIn: '1h', jwtid: expect.any(String) }
     );
     expect(jwt.sign).toHaveBeenCalledWith(
-      { userId: 'user-1' },
+      { userId: 'user-1', passwordIt: 1 },
       process.env.JWT_REFRESH_SECRET,
       { expiresIn: '30d', jwtid: expect.any(String) }
     );
@@ -128,8 +129,8 @@ describe('authService.signTokens', () => {
     jwt.sign.mockClear(); // only count calls from this test
 
     // Two separate signings, as would happen on login then refresh.
-    authService.signTokens('user-1');
-    authService.signTokens('user-1');
+    authService.signTokens('user-1', 1);
+    authService.signTokens('user-1', 1);
 
     // Each signTokens call signs two tokens (access + refresh), so four
     // jwt.sign calls. Pull the jwtid out of each call's options object.
@@ -146,13 +147,13 @@ describe('authService.signAccessToken', () => {
   it('signs a 1h access token with the access secret and a unique jwtid', () => {
     jwt.sign.mockImplementation((payload, secret, opts) => `token:${payload.userId}:${opts.expiresIn}`);
 
-    const token = authService.signAccessToken('user-1');
+    const token = authService.signAccessToken('user-1', 1);
 
     // Only an access token is minted here (the refresh route's whole job), and
     // it must use the access secret + 1h TTL with a per-token jwtid.
     expect(token).toBe('token:user-1:1h');
     expect(jwt.sign).toHaveBeenCalledWith(
-      { userId: 'user-1' },
+      { userId: 'user-1', passwordIt: 1 },
       process.env.JWT_ACCESS_SECRET,
       { expiresIn: '1h', jwtid: expect.any(String) }
     );
@@ -207,15 +208,18 @@ describe('authService.loginWithPassword', () => {
     userRepository.findByEmail.mockReset();
   });
 
-  it('returns the user id for valid credentials', async () => {
-    userRepository.findByEmail.mockResolvedValue({
+  it('returns the user row for valid credentials', async () => {
+    const row = {
       user_id: 'user-1',
       email: 'a@b.com',
       password_hash: 'stored-hash',
-    });
+      password_it: 1,
+      email_verified: true,
+    };
+    userRepository.findByEmail.mockResolvedValue(row);
     bcrypt.compare.mockResolvedValue(true);
 
-    await expect(authService.loginWithPassword('a@b.com', 'secret')).resolves.toBe('user-1');
+    await expect(authService.loginWithPassword('a@b.com', 'secret')).resolves.toBe(row);
   });
 
   it('rejects with 401 when the user is unknown', async () => {
@@ -303,9 +307,10 @@ describe('authService.loginWithGoogle', () => {
   });
 
   it('returns the local user when the google id is already linked', async () => {
-    userRepository.findByGoogleId.mockResolvedValue({ user_id: 'user-1' });
+    const row = { user_id: 'user-1', email: 'google@example.com', email_verified: true };
+    userRepository.findByGoogleId.mockResolvedValue(row);
 
-    await expect(authService.loginWithGoogle('id-token')).resolves.toBe('user-1');
+    await expect(authService.loginWithGoogle('id-token')).resolves.toBe(row);
     // The id_token must be verified against the app's own client id, so a
     // token minted for a different app is rejected by Google.
     expect(OAuth2Client.mockVerifyIdToken).toHaveBeenCalledWith({
@@ -314,30 +319,37 @@ describe('authService.loginWithGoogle', () => {
     });
   });
 
-  it('links google_id to an existing email-only account', async () => {
+  it('links google_id to an existing email-only account and returns the refreshed row', async () => {
     // Same email, no google_id yet: the account is upgraded in place instead
-    // of creating a duplicate.
+    // of creating a duplicate. The service re-reads the user afterward so the
+    // caller sees the linked row.
     userRepository.findByGoogleId.mockResolvedValue(null);
     userRepository.findByEmail.mockResolvedValue({ user_id: 'user-2', email: 'google@example.com' });
     userRepository.linkGoogleId.mockResolvedValue('user-2');
+    const linkedRow = { user_id: 'user-2', email: 'google@example.com', email_verified: false };
+    userRepository.findById.mockResolvedValue(linkedRow);
 
-    await expect(authService.loginWithGoogle('id-token')).resolves.toBe('user-2');
+    await expect(authService.loginWithGoogle('id-token')).resolves.toBe(linkedRow);
     expect(userRepository.linkGoogleId).toHaveBeenCalledWith('user-2', 'google-sub-1', null);
+    expect(userRepository.findById).toHaveBeenCalledWith('user-2');
   });
 
-  it('creates a new account for a brand-new google user', async () => {
+  it('creates a new account for a brand-new google user and returns its row', async () => {
     // Neither google_id nor email exists: a fresh account is created with no
     // password (Google-only login).
     userRepository.findByGoogleId.mockResolvedValue(null);
     userRepository.findByEmail.mockResolvedValue(null);
     userRepository.create.mockResolvedValue('user-3');
+    const createdRow = { user_id: 'user-3', email: 'google@example.com', email_verified: false };
+    userRepository.findById.mockResolvedValue(createdRow);
 
-    await expect(authService.loginWithGoogle('id-token')).resolves.toBe('user-3');
+    await expect(authService.loginWithGoogle('id-token')).resolves.toBe(createdRow);
     expect(userRepository.create).toHaveBeenCalledWith({
       email: 'google@example.com',
       fullName: null,
       passwordHash: null,
       googleId: 'google-sub-1',
     });
+    expect(userRepository.findById).toHaveBeenCalledWith('user-3');
   });
 });

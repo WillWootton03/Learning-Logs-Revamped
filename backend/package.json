@@ -19,6 +19,7 @@
     "google-auth-library": "^11.0.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "~1.9.1",
+    "nodemailer": "^9.0.4",
     "pg": "^8.22.0"
   },
   "devDependencies": {

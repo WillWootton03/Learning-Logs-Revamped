@@ -1,12 +1,26 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
-  user_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email         TEXT NOT NULL UNIQUE,
-  full_name     TEXT,
-  password_hash TEXT,
-  google_id     TEXT UNIQUE,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  user_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          TEXT NOT NULL UNIQUE,
+  full_name      TEXT,
+  password_hash  TEXT,
+  google_id      TEXT UNIQUE,
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  -- Bumped every time the password changes. Tokens embed the value they were
+  -- minted against, so a password reset/change revokes every older session.
+  password_it    INT NOT NULL DEFAULT 1,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Password reset tokens. One row per user (a new request overwrites the old
+-- token), so a user can never have two live reset links. The token is a
+-- random hex string and is the primary key; requested_at backs the expiry
+-- check. Rows are deleted once the reset is used.
+CREATE TABLE IF NOT EXISTS password_resets (
+  token         TEXT PRIMARY KEY,
+  user_id       UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  requested_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS boards (
@@ -115,6 +129,10 @@ CREATE INDEX IF NOT EXISTS idx_quiz_quiz_settings_id ON quiz (quiz_settings_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON quiz_questions (quiz_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_concept_id ON quiz_questions (concept_id);
 
+-- One reset row per user: the unique index backs both the per-user lookup
+-- (requestReset / cleanup) and the ON CONFLICT upsert in the repository.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_password_resets_user_id ON password_resets (user_id);
+
 -- Idempotent migrations for databases created before these columns existed.
 -- CREATE TABLE IF NOT EXISTS never alters an existing table, so existing
 -- deployments pick these up via ADD COLUMN IF NOT EXISTS on re-run.
@@ -123,5 +141,7 @@ ALTER TABLE boards ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '#7c6af7
 ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS exact_matching BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS match_all_tags BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_it INT NOT NULL DEFAULT 1;
 
 

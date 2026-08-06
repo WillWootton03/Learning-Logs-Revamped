@@ -6,7 +6,11 @@ import {
   logout as apiLogout,
   refresh as apiRefresh,
   register as apiRegister,
+  resendVerification as apiResendVerification,
   updateProfile as apiUpdateProfile,
+  changePassword as apiChangePassword,
+  verifyEmail as apiVerifyEmail,
+  ApiError,
   type User,
 } from "../lib/api";
 
@@ -16,17 +20,31 @@ type AuthState = {
   /** True while the initial session check (GET /users/me) is in flight. */
   isLoading: boolean;
   isAuthenticated: boolean;
+  /**
+   * Set when an account is created or a login is blocked because the email
+   * isn't verified yet. The verify page reads this to know which address to
+   * show. Null once verification succeeds.
+   */
+  pendingVerification: { email: string } | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
+  /** Confirm a stateless verification code; signs the user in on success. */
+  verifyEmail: (code: string) => Promise<void>;
+  /** Email a fresh verification code to an unverified account. */
+  resendVerification: (email: string) => Promise<number>;
+  clearPendingVerification: () => void;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
-  /** Persist profile changes (name/email/password) and refresh local state. */
+  /** Persist profile changes (name/email) and refresh local state. */
   updateProfile: (data: {
     name?: string;
     email?: string;
-    password?: string;
-    currentPassword?: string;
   }) => Promise<void>;
+  /**
+   * Change the signed-in user's password. The backend verifies the current
+   * password before writing the new hash. Local user state is untouched.
+   */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Permanently delete the account (used by the settings danger zone). */
   deleteAccount: () => Promise<void>;
 };
@@ -36,6 +54,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingVerification, setPendingVerification] = useState<{ email: string } | null>(null);
 
   // Restore the session on first load. Try GET /users/me first: a valid
   // access cookie resolves it and we're signed in without a re-login. If the
@@ -67,13 +86,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    await apiLogin({ email, password });
-    setUser(await getMe());
+    try {
+      await apiLogin({ email, password });
+      setUser(await getMe());
+    } catch (err) {
+      // An unverified account can't be signed in — drop into the verify flow
+      // with the address the backend confirmed.
+      if (err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED") {
+        setPendingVerification({ email: err.email ?? email });
+      }
+      throw err;
+    }
   }
 
   async function register(email: string, password: string) {
     await apiRegister({ email, password });
+    // Registration never signs the user in — it sends a verification code.
+    setPendingVerification({ email });
+  }
+
+  async function verifyEmail(code: string) {
+    await apiVerifyEmail(code);
     setUser(await getMe());
+    setPendingVerification(null);
+  }
+
+  async function resendVerification(email: string): Promise<number> {
+    const res = await apiResendVerification(email);
+    return res.resendAfterMs;
+  }
+
+  function clearPendingVerification() {
+    setPendingVerification(null);
   }
 
   async function logout() {
@@ -93,11 +137,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function updateProfile(data: {
     name?: string;
     email?: string;
-    password?: string;
-    currentPassword?: string;
   }) {
     const updated = await apiUpdateProfile(data);
     setUser(updated);
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string) {
+    await apiChangePassword(currentPassword, newPassword);
   }
 
   async function deleteAccount() {
@@ -111,11 +157,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        pendingVerification,
         login,
         register,
+        verifyEmail,
+        resendVerification,
+        clearPendingVerification,
         logout,
         refresh,
         updateProfile,
+        changePassword,
         deleteAccount,
       }}
     >

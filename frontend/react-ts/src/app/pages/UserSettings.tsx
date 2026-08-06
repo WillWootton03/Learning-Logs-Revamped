@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, Eye, EyeOff, Moon, Save, Sun } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, MailCheck, Moon, Save, Sun } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { ConfirmModal } from "../components/ConfirmModal";
 
 export function UserSettings() {
   const navigate = useNavigate();
-  const { user, updateProfile, deleteAccount } = useAuth();
+  const { user, updateProfile, changePassword, deleteAccount, resendVerification } = useAuth();
   const { theme, setTheme } = useTheme();
 
   // Profile form — seeded from the signed-in user (RequireAuth guarantees the
@@ -18,6 +18,11 @@ export function UserSettings() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // Unverified-email banner
+  const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifySending, setVerifySending] = useState(false);
 
   // Password form
   const [currentPassword, setCurrentPassword] = useState("");
@@ -46,10 +51,29 @@ export function UserSettings() {
       await updateProfile({ name: name.trim(), email: email.trim() });
       setProfileSaved(true);
       window.setTimeout(() => setProfileSaved(false), 2000);
+      // Changing the email marks it unverified; the fresh code was just emailed.
+      if (email.trim().toLowerCase() !== (user?.email ?? "").toLowerCase()) {
+        setVerifyNotice("We emailed a verification code to your new address.");
+      }
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
       setProfileSaving(false);
+    }
+  }
+
+  async function handleSendVerification() {
+    if (!user?.email || verifySending) return;
+    setVerifySending(true);
+    setVerifyError(null);
+    setVerifyNotice(null);
+    try {
+      await resendVerification(user.email);
+      setVerifyNotice("A new verification code is on its way.");
+    } catch (err) {
+      setVerifyError(err instanceof Error ? err.message : "Couldn't send a new code");
+    } finally {
+      setVerifySending(false);
     }
   }
 
@@ -60,7 +84,7 @@ export function UserSettings() {
     setPasswordError(null);
     setPasswordSaved(false);
     try {
-      await updateProfile({ password: newPassword, currentPassword });
+      await changePassword(currentPassword, newPassword);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -99,6 +123,42 @@ export function UserSettings() {
         <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">Account</p>
         <h1 className="text-foreground">Settings</h1>
       </div>
+
+      {/* Unverified email */}
+      {user?.emailVerified === false && (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-card border border-amber-500/30 rounded-xl px-6 py-4 flex flex-col gap-3"
+        >
+          <div className="flex items-start gap-3">
+            <MailCheck className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-foreground">Your email isn't verified yet</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                {verifyNotice ?? "Check your inbox for a verification code."}
+              </p>
+              {verifyError && <p className="text-[11px] text-rose-400 font-mono">{verifyError}</p>}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/verify?email=${encodeURIComponent(user.email)}`)}
+              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:bg-primary/90 transition-colors"
+            >
+              Enter code
+            </button>
+            <button
+              onClick={handleSendVerification}
+              disabled={verifySending}
+              className="px-3 py-1.5 rounded-lg border border-border text-xs text-foreground hover:border-primary/40 transition-colors disabled:opacity-50"
+            >
+              {verifySending ? "Sending…" : "Send a new code"}
+            </button>
+          </div>
+        </motion.section>
+      )}
 
       {/* Appearance */}
       <motion.section

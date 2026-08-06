@@ -7,6 +7,7 @@ router.use(authenticate);
 
 router.get('/me', userController.me);
 router.put('/me', userController.update);
+router.put('/me/password', userController.changePassword);
 router.delete('/me', userController.remove);
 
 module.exports = router;

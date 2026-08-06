@@ -1,6 +1,6 @@
 const authService = require('../services/authService');
 const userRepository = require('../repositories/userRepository');
-const { ACCESS_COOKIE } = require('../utils/cookies');
+const { ACCESS_COOKIE, clearAuthCookies } = require('../utils/cookies');
 
 /**
  * Verify the access token from the httpOnly cookie and attach the user's id
@@ -12,6 +12,11 @@ const { ACCESS_COOKIE } = require('../utils/cookies');
  * observable endpoint) and retrying the request. Keeping refresh on that route
  * makes every token renewal visible in the server logs, which is much easier
  * to track and debug than an inline mint buried in the middleware.
+ *
+ * Password versioning: tokens embed the user's password_it at issuance. If it
+ * no longer matches the account's current value, the password changed since
+ * the token was minted — the session is stale, so the cookies are revoked and
+ * the request is rejected, forcing the client back to the login page.
  */
 async function authenticate(req, res, next) {
   const accessToken = req.cookies[ACCESS_COOKIE];
@@ -32,6 +37,15 @@ async function authenticate(req, res, next) {
     const user = await userRepository.findById(payload.userId);
     if (!user) {
       return res.status(401).json({ error: 'Authentication required' });
+    }
+    // A password change bumped password_it — tokens issued before it are
+    // stale. Revoke the cookies and demand a fresh login.
+    if (payload.passwordIt !== user.password_it) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        error: 'Password changed. Please sign in again.',
+        code: 'PASSWORD_CHANGED',
+      });
     }
     req.userId = payload.userId;
     next();

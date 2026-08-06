@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { GraduationCap, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { GuestOnly } from "../components/GuestOnly";
+import { ApiError } from "../lib/api";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -23,6 +24,12 @@ export function Login() {
       // The httpOnly JWT cookies are set by the backend; we're signed in.
       navigate("/app");
     } catch (err) {
+      // An unverified account can't sign in — the backend already emailed a
+      // code, so drop into the verification flow.
+      if (err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED") {
+        navigate("/verify");
+        return;
+      }
       setSubmitError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setIsSubmitting(false);
@@ -100,6 +107,12 @@ export function Login() {
             {isSubmitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <p className="text-center text-sm text-muted-foreground">
+          <Link to="/forgot-password" className="text-primary hover:underline">
+            Forgot password?
+          </Link>
+        </p>
 
         <p className="text-center text-sm text-muted-foreground">
           Don't have an account?{" "}

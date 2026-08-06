@@ -41,6 +41,7 @@ function stripHash(user) {
     user_id: user.user_id,
     email: user.email,
     full_name: user.full_name ?? null,
+    email_verified: user.email_verified ?? false,
     created_at: user.created_at ?? null,
   };
 }
@@ -82,14 +83,15 @@ async function create({ email, fullName = null, passwordHash, googleId }) {
 }
 
 /**
- * Update a user's name, email and/or password hash. Only provided fields
- * change; passing an empty name string clears the stored display name.
+ * Update a user's name and/or email. Only provided fields change; passing an
+ * empty name string clears the stored display name. Password changes are
+ * handled by passwordService.changePassword, not here.
  * @param {string} id - User id (UUID).
- * @param {{fullName?: string|null, email?: string, passwordHash?: string}} changes
+ * @param {{fullName?: string|null, email?: string}} changes
  * @returns {Promise<object>} Updated safe user object.
  * @throws {AppError} 400 invalid email/name, 404 user missing, 409 email taken.
  */
-async function update(id, { fullName, email, passwordHash }) {
+async function update(id, { fullName, email }) {
   if (email !== undefined && !validateEmail(email)) {
     throw new AppError(400, 'A valid email is required');
   }
@@ -106,7 +108,6 @@ async function update(id, { fullName, email, passwordHash }) {
   const userId = await userRepository.update(id, {
     fullName,
     email,
-    passwordHash,
   });
   if (!userId) throw new AppError(404, 'User not found');
   const user = await userRepository.findById(id);

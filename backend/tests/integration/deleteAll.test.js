@@ -19,17 +19,17 @@
 const request = require('supertest');
 const app = require('../../app');
 const { truncateAll } = require('./helpers/db');
+const { registerVerifiedUser } = require('./helpers/auth');
 
 const VALID_USER = { email: 'ada@example.com', password: 'password123' };
 
 /**
- * Register a user and return an agent that carries the auth cookies.
+ * Register a verified user and return an agent that carries the auth cookies.
  * @param {object} [overrides] - Body overrides for register.
  * @returns {Promise<import('supertest').SuperAgentTest>}
  */
 async function registerUser(overrides = {}) {
-  const agent = request.agent(app);
-  await agent.post('/auth/register').send({ ...VALID_USER, ...overrides }).expect(201);
+  const { agent } = await registerVerifiedUser({ ...VALID_USER, ...overrides });
   return agent;
 }
 

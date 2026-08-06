@@ -6,8 +6,8 @@
  * (boards, concepts, logs, ...), add matching modules here.
  */
 export { ApiError, request } from "./client";
-export { register, login, logout, refresh } from "./auth";
-export { getMe, updateProfile, deleteAccount, type User } from "./users";
+export { register, login, logout, refresh, verifyEmail, resendVerification, forgotPassword, resetPassword } from "./auth";
+export { getMe, updateProfile, changePassword, deleteAccount, type User } from "./users";
 export { listBoards, createBoard, updateBoard, deleteBoard } from "./boards";
 export { listLogs, createLog, updateLog, deleteLog, deleteAllLogs } from "./logs";
 export { listRuns, getRunBreakdown, deleteAllRuns } from "./sessions";

@@ -12,6 +12,8 @@ export type User = {
   email: string;
   /** Display name; null until the user (or Google sign-in) provides one. */
   fullName: string | null;
+  /** Whether the current email has been verified (false after an email change). */
+  emailVerified: boolean;
   /** Account creation timestamp (profile page "Joined" line). */
   createdAt: string | null;
 };
@@ -19,6 +21,7 @@ export type User = {
 type UserRow = {
   email: string;
   full_name: string | null;
+  email_verified: boolean;
   created_at: string | null;
 };
 
@@ -26,6 +29,7 @@ function toUser(row: UserRow): User {
   return {
     email: row.email,
     fullName: row.full_name ?? null,
+    emailVerified: row.email_verified,
     createdAt: row.created_at ?? null,
   };
 }
@@ -36,19 +40,28 @@ export function getMe() {
 
 /**
  * Update the signed-in user's profile. Name and/or email can change; empty
- * name clears the display name. To change the password, pass both the new
- * password and the current one (the backend verifies it).
+ * name clears the display name. Password changes have their own endpoint
+ * (changePassword) so credential writes never share this code path.
  */
 export function updateProfile(data: {
   name?: string;
   email?: string;
-  password?: string;
-  currentPassword?: string;
 }) {
   return request<UserRow>("/users/me", {
     method: "PUT",
     body: JSON.stringify(data),
   }).then(toUser);
+}
+
+/**
+ * Change the signed-in user's password. The backend verifies the current
+ * password against the stored hash before replacing it with the new one.
+ */
+export function changePassword(currentPassword: string, newPassword: string) {
+  return request<{ user_id: string }>("/users/me/password", {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
 }
 
 /** Permanently delete the signed-in account. */

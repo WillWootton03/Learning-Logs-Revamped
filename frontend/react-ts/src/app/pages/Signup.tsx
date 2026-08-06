@@ -27,8 +27,9 @@ export function Signup() {
     setIsSubmitting(true);
     try {
       await register(email, password);
-      // The httpOnly JWT cookies are set by the backend; the account is live.
-      navigate("/app");
+      // Registration sends a verification code; the account isn't active until
+      // the email is confirmed.
+      navigate("/verify");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

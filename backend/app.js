@@ -47,7 +47,9 @@ app.use(function (err, req, res, next) {
   if (status === 500) {
     console.error(err);
   }
-  res.status(status).json({ error: err.message || 'Internal server error' });
+  // Include the machine-readable code when the service attached one, so the
+  // client can detect e.g. EMAIL_NOT_VERIFIED without parsing messages.
+  res.status(status).json({ error: err.message || 'Internal server error', code: err.code });
 });
 
 module.exports = app;
