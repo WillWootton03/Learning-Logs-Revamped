@@ -24,6 +24,8 @@ export type Concept = {
   id: string;
   title: string;
   answer: string;
+  /** Optional hint shown on the detail page and revealable during a session. */
+  hint: string | null;
   learned: boolean;
   tags: string[];
   lastReviewed: string | null;
@@ -37,6 +39,18 @@ export type SessionPreset = {
   includeKnown: boolean;
   /** Tag ids the setting filters by; null means all tags on the board. */
   tagIds: string[] | null;
+  /**
+   * Tag filter mode. false (default) = a concept with ANY selected tag
+   * qualifies; true = it must carry EVERY selected tag. Frontend-only state,
+   * passed along when the session's questions are generated.
+   */
+  matchAllTags: boolean;
+  /**
+   * Answer matching mode for fill-in questions. false (default) = lenient
+   * (minor typos still count); true = exact after trim/lowercase, no typo
+   * tolerance. Frontend-only state, sent to the server when the run records.
+   */
+  exactMatching: boolean;
 };
 
 export type ConceptResult = {

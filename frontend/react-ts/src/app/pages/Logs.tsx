@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { FileText, Pencil, Plus } from "lucide-react";
+import { FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useLogs } from "../context/LogContext";
 import { LogModal } from "../components/LogModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { BackButton } from "../components/BackButton";
 import type { Log } from "../types";
 
@@ -24,10 +25,12 @@ export function Logs() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { boards, isBoardsLoading } = useBoard();
-  const { logs, loadLogs } = useLogs();
+  const { logs, loadLogs, deleteAllLogs } = useLogs();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingLog, setEditingLog] = useState<Log | null>(null);
   // Bumped on every open so LogModal remounts fresh (its lazy state init
   // seeds from the log being edited).
@@ -71,6 +74,20 @@ export function Logs() {
     setModalOpen(true);
   }
 
+  async function handleDeleteAll() {
+    if (!id) return;
+    setIsDeleting(true);
+    try {
+      await deleteAllLogs(id);
+      setDeleteOpen(false);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to delete logs");
+      setDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (isBoardsLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -99,13 +116,24 @@ export function Logs() {
             <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
             <h1 className="text-foreground">Logs</h1>
           </div>
-          <button
-            onClick={openNew}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New log
-          </button>
+          <div className="flex items-center gap-2">
+            {boardLogs.length > 0 && (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete all
+              </button>
+            )}
+            <button
+              onClick={openNew}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New log
+            </button>
+          </div>
         </div>
       </div>
 
@@ -177,6 +205,14 @@ export function Logs() {
         log={editingLog}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
+      />
+      <ConfirmModal
+        open={deleteOpen}
+        title="Delete all logs"
+        description={`This permanently deletes all ${boardLogs.length} logs on this board. This cannot be undone.`}
+        busy={isDeleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteAll}
       />
     </main>
   );

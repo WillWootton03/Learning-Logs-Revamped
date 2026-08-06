@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/', quizController.listRuns);
 router.post('/', quizController.recordRun);
 router.post('/generate', quizController.generateQuestions);
+router.delete('/', quizController.removeAll);
 router.get('/:quizId', quizController.getRunBreakdown);
 
 module.exports = router;

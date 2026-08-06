@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { Search, CheckCircle2, Circle, Plus, Upload } from "lucide-react";
+import { Search, CheckCircle2, Circle, Plus, Upload, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { AddConceptModal } from "../components/AddConceptModal";
 import { CSVUploadModal } from "../components/CSVUploadModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { BackButton } from "../components/BackButton";
+import { fuzzyMatch } from "../lib/search";
 
 type Filter = "all" | "learned" | "unlearned";
 
@@ -14,13 +16,15 @@ export function AllConcepts() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { boards, isBoardsLoading } = useBoard();
-  const { concepts, loadConcepts } = useConcepts();
+  const { concepts, loadConcepts, deleteAllConcepts } = useConcepts();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [addConceptOpen, setAddConceptOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Tracks the board whose concepts have finished loading; while it doesn't
   // match the current route the page shows a spinner. Using derived state
   // (rather than resetting flags in the effect) keeps all writes in callbacks.
@@ -70,6 +74,20 @@ export function AllConcepts() {
     );
   }
 
+  async function handleDeleteAll() {
+    if (!id) return;
+    setIsDeleting(true);
+    try {
+      await deleteAllConcepts(id);
+      setDeleteOpen(false);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to delete concepts");
+      setDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const allTags = Array.from(new Set(all.flatMap((c) => c.tags))).sort();
 
   /** Toggle a tag in/out of the active tag filter set. */
@@ -83,7 +101,8 @@ export function AllConcepts() {
   }
 
   const filtered = all.filter((c) => {
-    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
+    // Search matches the prompt OR the answer, fuzzy (typo-tolerant).
+    if (search && !fuzzyMatch(search, c.title) && !fuzzyMatch(search, c.answer)) return false;
     if (filter === "learned" && !c.learned) return false;
     if (filter === "unlearned" && c.learned) return false;
     // A concept must have every selected tag to match.
@@ -103,6 +122,15 @@ export function AllConcepts() {
             <h1 className="text-foreground">All Concepts</h1>
           </div>
           <div className="flex items-center gap-2">
+            {all.length > 0 && (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete all
+              </button>
+            )}
             <button
               onClick={() => setCsvOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
@@ -205,12 +233,13 @@ export function AllConcepts() {
               <p className="text-sm">No concepts match.</p>
             </div>
           ) : (
-            filtered.map((concept, i) => (
+            filtered.map((concept) => (
               <motion.div
                 key={concept.id}
+                layout
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: i * 0.03 }}
+                transition={{ duration: 0.2 }}
                 onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
                 className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer"
               >
@@ -253,6 +282,14 @@ export function AllConcepts() {
 
       <AddConceptModal boardId={id!} open={addConceptOpen} onClose={() => setAddConceptOpen(false)} />
       <CSVUploadModal boardId={id!} open={csvOpen} onClose={() => setCsvOpen(false)} />
+      <ConfirmModal
+        open={deleteOpen}
+        title="Delete all concepts"
+        description={`This permanently deletes all ${all.length} concepts on this board, along with their tags and quiz history. This cannot be undone.`}
+        busy={isDeleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteAll}
+      />
     </main>
   );
 }

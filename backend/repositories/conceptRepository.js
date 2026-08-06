@@ -295,6 +295,25 @@ async function importMany(userId, boardId, rows) {
   }
 }
 
+/**
+ * Delete every concept on a board, joined through boards so only the owner's
+ * concepts are removed. concept_tags and quiz_questions cascade.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @returns {Promise<number>} Number of concepts deleted.
+ */
+async function removeAll(userId, boardId) {
+  const result = await pool.query(
+    `DELETE FROM concepts c
+     USING boards b
+     WHERE c.board_id = b.board_id
+       AND b.board_id = $1
+       AND b.user_id = $2`,
+    [boardId, userId]
+  );
+  return result.rowCount;
+}
+
 module.exports = {
   findAllByBoard,
   findById,
@@ -304,4 +323,5 @@ module.exports = {
   remove,
   setLearned,
   importMany,
+  removeAll,
 };

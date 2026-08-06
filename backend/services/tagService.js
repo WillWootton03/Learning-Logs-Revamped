@@ -227,6 +227,18 @@ async function listConceptTags(userId, boardId, conceptId) {
   return tagRepository.findByConcept(userId, boardId, conceptId);
 }
 
+/**
+ * Delete every tag on a board. Unlinks them from all concepts and settings
+ * (cascades in the schema). Verified against ownership via the repo's SQL join.
+ * @param {string} userId
+ * @param {string} boardId
+ * @returns {Promise<{deleted: number}>}
+ */
+async function removeAll(userId, boardId) {
+  const deleted = await tagRepository.removeAll(userId, boardId);
+  return { deleted };
+}
+
 module.exports = {
   list,
   getById,
@@ -238,4 +250,5 @@ module.exports = {
   linkMany,
   unlinkConcept,
   listConceptTags,
+  removeAll,
 };

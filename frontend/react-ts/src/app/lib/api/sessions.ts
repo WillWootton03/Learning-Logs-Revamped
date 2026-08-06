@@ -56,3 +56,10 @@ export async function listRuns(boardId: string) {
     } satisfies SessionRecord;
   });
 }
+
+/** Delete every quiz run (session history) on a board. */
+export function deleteAllRuns(boardId: string) {
+  return request<{ deleted: number }>(`/boards/${boardId}/quizzes`, {
+    method: "DELETE",
+  });
+}

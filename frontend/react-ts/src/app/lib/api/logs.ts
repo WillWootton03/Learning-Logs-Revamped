@@ -55,3 +55,10 @@ export function deleteLog(boardId: string, logId: string) {
     method: "DELETE",
   });
 }
+
+/** Delete every log on a board. */
+export function deleteAllLogs(boardId: string) {
+  return request<{ deleted: number }>(`/boards/${boardId}/logs`, {
+    method: "DELETE",
+  });
+}

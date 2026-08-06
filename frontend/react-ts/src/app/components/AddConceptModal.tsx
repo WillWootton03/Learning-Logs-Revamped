@@ -186,7 +186,7 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
                   <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
                     {query ? "Matching tags" : "Tags from this board"}
                   </p>
-                  <div className="h-18 overflow-y-auto rounded-lg border border-border bg-secondary/40 p-1.5 pr-1">
+                  <div className="tag-scrollbox h-18 overflow-y-auto rounded-lg border border-border bg-secondary/40 p-1.5 pr-1">
                     {canCreateTag && (
                       <button
                         type="button"

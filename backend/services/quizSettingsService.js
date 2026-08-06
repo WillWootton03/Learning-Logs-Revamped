@@ -86,11 +86,11 @@ async function getById(userId, boardId, quizSettingsId) {
  * Create quiz settings, optionally linked to tags.
  * @param {string} userId
  * @param {string} boardId
- * @param {{name: string, style: string, includeKnown?: boolean, tagIds?: string[]}} data
+ * @param {{name: string, style: string, includeKnown?: boolean, exactMatching?: boolean, tagIds?: string[]}} data
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid fields, 404 if board missing.
  */
-async function create(userId, boardId, { name, style, includeKnown = false, tagIds }) {
+async function create(userId, boardId, { name, style, includeKnown = false, exactMatching = false, tagIds }) {
   if (!validateName(name)) {
     throw new AppError(400, `Name is required (max ${MAX_NAME_LENGTH} characters)`);
   }
@@ -100,11 +100,15 @@ async function create(userId, boardId, { name, style, includeKnown = false, tagI
   if (typeof includeKnown !== 'boolean') {
     throw new AppError(400, 'includeKnown must be a boolean');
   }
+  if (typeof exactMatching !== 'boolean') {
+    throw new AppError(400, 'exactMatching must be a boolean');
+  }
   const resolvedTagIds = await resolveTagIds(userId, boardId, tagIds);
   const setting = await quizSettingsRepository.create(userId, boardId, {
     name: name.trim(),
     style,
     includeKnown,
+    exactMatching,
   });
   if (!setting) throw new AppError(404, 'Board not found');
   if (resolvedTagIds.length > 0) {
@@ -120,11 +124,11 @@ async function create(userId, boardId, { name, style, includeKnown = false, tagI
  * @param {string} userId
  * @param {string} boardId
  * @param {string} quizSettingsId
- * @param {{name?: string, style?: string, includeKnown?: boolean}} changes
+ * @param {{name?: string, style?: string, includeKnown?: boolean, exactMatching?: boolean}} changes
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid fields, 404 if settings missing.
  */
-async function update(userId, boardId, quizSettingsId, { name, style, includeKnown }) {
+async function update(userId, boardId, quizSettingsId, { name, style, includeKnown, exactMatching }) {
   const fields = {};
   if (name !== undefined) {
     if (!validateName(name)) {
@@ -143,6 +147,12 @@ async function update(userId, boardId, quizSettingsId, { name, style, includeKno
       throw new AppError(400, 'includeKnown must be a boolean');
     }
     fields.includeKnown = includeKnown;
+  }
+  if (exactMatching !== undefined) {
+    if (typeof exactMatching !== 'boolean') {
+      throw new AppError(400, 'exactMatching must be a boolean');
+    }
+    fields.exactMatching = exactMatching;
   }
   let setting;
   if (Object.keys(fields).length > 0) {

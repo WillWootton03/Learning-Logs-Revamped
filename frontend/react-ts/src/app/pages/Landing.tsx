@@ -2,7 +2,7 @@ import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
   GraduationCap, BookOpen, Tag, RotateCcw, FileText,
-  CheckCircle2, BarChart2, Flame, ArrowRight, Zap,
+  CheckCircle2, BarChart2, Flame, ArrowRight,
 } from "lucide-react";
 import { GuestOnly } from "../components/GuestOnly";
 

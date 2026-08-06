@@ -262,6 +262,25 @@ async function findByConcept(userId, boardId, conceptId) {
   return result.rows;
 }
 
+/**
+ * Delete every tag on a board, joined through boards so only the owner's
+ * tags are removed. concept_tags and quiz_settings_tags cascade.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @returns {Promise<number>} Number of tags deleted.
+ */
+async function removeAll(userId, boardId) {
+  const result = await pool.query(
+    `DELETE FROM tags t
+     USING boards b
+     WHERE t.board_id = b.board_id
+       AND b.board_id = $1
+       AND b.user_id = $2`,
+    [boardId, userId]
+  );
+  return result.rowCount;
+}
+
 module.exports = {
   findAllByBoard,
   findById,
@@ -275,4 +294,5 @@ module.exports = {
   linkMany,
   unlinkConcept,
   findByConcept,
+  removeAll,
 };

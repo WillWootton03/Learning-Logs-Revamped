@@ -16,10 +16,10 @@ const RUN_COLUMNS =
  * build questions and to source distractors.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
- * @param {{tagIds: string[]|null, includeKnown: boolean}} opts
+ * @param {{tagIds: string[]|null, includeKnown: boolean, matchAll?: boolean}} opts
  * @returns {Promise<Array<object>>} Concept rows (concept_id, prompt, answer, hint).
  */
-async function findEligibleConcepts(userId, boardId, { tagIds, includeKnown }) {
+async function findEligibleConcepts(userId, boardId, { tagIds, includeKnown, matchAll = false }) {
   const result = await pool.query(
     `SELECT DISTINCT c.concept_id, c.prompt, c.answer, c.hint
      FROM concepts c
@@ -27,9 +27,18 @@ async function findEligibleConcepts(userId, boardId, { tagIds, includeKnown }) {
      LEFT JOIN concept_tags ct ON ct.concept_id = c.concept_id
      WHERE c.board_id = $1
        AND b.user_id = $2
-       AND ($3::uuid[] IS NULL OR ct.tag_id = ANY($3::uuid[]))
+       AND (
+         $3::uuid[] IS NULL
+         OR (
+           $5::boolean AND (
+             SELECT COUNT(*) FROM concept_tags ct2
+             WHERE ct2.concept_id = c.concept_id AND ct2.tag_id = ANY($3::uuid[])
+           ) = CARDINALITY($3::uuid[])
+         )
+         OR (NOT $5::boolean AND ct.tag_id = ANY($3::uuid[]))
+       )
        AND ($4::boolean OR c.times_answered_correctly < b.mastery_threshold)`,
-    [boardId, userId, tagIds && tagIds.length ? tagIds : null, includeKnown]
+    [boardId, userId, tagIds && tagIds.length ? tagIds : null, includeKnown, matchAll]
   );
   return result.rows;
 }
@@ -192,6 +201,25 @@ async function findQuestionsByRunId(userId, boardId, quizId) {
   return result.rows;
 }
 
+/**
+ * Delete every quiz run on a board, joined through boards so only the owner's
+ * runs are removed. quiz_questions cascade.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @returns {Promise<number>} Number of runs deleted.
+ */
+async function removeAll(userId, boardId) {
+  const result = await pool.query(
+    `DELETE FROM quiz q
+     USING boards b
+     WHERE q.board_id = b.board_id
+       AND b.board_id = $1
+       AND b.user_id = $2`,
+    [boardId, userId]
+  );
+  return result.rowCount;
+}
+
 module.exports = {
   findEligibleConcepts,
   createRun,
@@ -199,4 +227,5 @@ module.exports = {
   findRunsBySettings,
   findRunById,
   findQuestionsByRunId,
+  removeAll,
 };

@@ -9,8 +9,8 @@ export { ApiError, request } from "./client";
 export { register, login, logout, refresh } from "./auth";
 export { getMe, type User } from "./users";
 export { listBoards, createBoard, updateBoard, deleteBoard } from "./boards";
-export { listLogs, createLog, updateLog, deleteLog } from "./logs";
-export { listRuns } from "./sessions";
+export { listLogs, createLog, updateLog, deleteLog, deleteAllLogs } from "./logs";
+export { listRuns, deleteAllRuns } from "./sessions";
 export {
   listQuizSettings,
   createQuizSettings,
@@ -21,5 +21,5 @@ export {
 } from "./quizSettings";
 export { generateQuestions, recordRun, recordRunFromSettings } from "./quizzes";
 export type { QuizStyle, QuizQuestion, QuizAnswer, QuizScoredResult } from "./quizzes";
-export { listConcepts, createConcept, updateConcept, setConceptLearned, deleteConcept, listTags, createTag, linkTag, createTags, linkTags, getConcept, listConceptTags, unlinkTag, updateTag, deleteTag, importConcepts } from "./concepts";
+export { listConcepts, createConcept, updateConcept, setConceptLearned, deleteConcept, deleteAllConcepts, listTags, createTag, linkTag, createTags, linkTags, getConcept, listConceptTags, unlinkTag, updateTag, deleteTag, deleteAllTags, importConcepts } from "./concepts";
 export type { ImportConceptRow } from "./concepts";

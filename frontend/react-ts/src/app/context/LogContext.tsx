@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import type { Log } from "../types";
 import {
   createLog as apiCreateLog,
+  deleteAllLogs as apiDeleteAllLogs,
   deleteLog as apiDeleteLog,
   listLogs,
   updateLog as apiUpdateLog,
@@ -14,6 +15,8 @@ type LogState = {
   createLog: (boardId: string, input: { title: string; body: string }) => Promise<Log>;
   updateLog: (boardId: string, logId: string, changes: { title?: string; body?: string }) => Promise<void>;
   deleteLog: (boardId: string, logId: string) => Promise<void>;
+  /** Delete every log on a board, then clear the local list. */
+  deleteAllLogs: (boardId: string) => Promise<void>;
 };
 
 const LogContext = createContext<LogState | null>(null);
@@ -57,8 +60,14 @@ export function LogProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  /** Delete every log on the board, then clear the local list. */
+  const deleteAllLogs = useCallback(async (boardId: string) => {
+    await apiDeleteAllLogs(boardId);
+    setLogs((prev) => ({ ...prev, [boardId]: [] }));
+  }, []);
+
   return (
-    <LogContext.Provider value={{ logs, loadLogs, createLog, updateLog, deleteLog }}>
+    <LogContext.Provider value={{ logs, loadLogs, createLog, updateLog, deleteLog, deleteAllLogs }}>
       {children}
     </LogContext.Provider>
   );

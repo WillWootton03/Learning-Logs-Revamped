@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/', tagController.list);
 router.post('/', tagController.create);
 router.post('/bulk', tagController.createMany);
+router.delete('/', tagController.removeAll);
 router.get('/:tagId', tagController.getById);
 router.put('/:tagId', tagController.update);
 router.delete('/:tagId', tagController.remove);

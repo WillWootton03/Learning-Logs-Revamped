@@ -50,6 +50,9 @@ export function ConceptDetail() {
   // Every tag on the board (id + name) — powers the add-tag dropdown search.
   const [boardTags, setBoardTags] = useState<TagMeta[]>([]);
   const [lastReviewed, setLastReviewed] = useState<string | null>(null);
+  // The concept's hint — like updated_at, only the detail row carries it, so
+  // it lives in its own state rather than on the (summary) context concept.
+  const [hintValue, setHintValue] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -62,6 +65,7 @@ export function ConceptDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftAnswer, setDraftAnswer] = useState("");
+  const [draftHint, setDraftHint] = useState("");
   const [draftLearned, setDraftLearned] = useState(false);
   // Staged tag names for this concept after add/remove/rename operations.
   const [draftTags, setDraftTags] = useState<string[]>([]);
@@ -123,6 +127,7 @@ export function ConceptDetail() {
           setTagMeta(tags);
           setBoardTags(allBoardTags);
           setLastReviewed(detail.updated_at ?? null);
+          setHintValue(detail.hint ?? null);
           setLoadError(null);
         }
       } catch (err) {
@@ -156,6 +161,7 @@ export function ConceptDetail() {
     if (!concept) return;
     setDraftTitle(concept.title);
     setDraftAnswer(concept.answer);
+    setDraftHint(hintValue ?? "");
     setDraftLearned(concept.learned);
     setDraftTags(concept.tags);
     setPendingRenames({});
@@ -167,6 +173,7 @@ export function ConceptDetail() {
     setIsEditing(false);
     setDraftTitle("");
     setDraftAnswer("");
+    setDraftHint("");
     setDraftLearned(false);
     setDraftTags([]);
     setPendingRenames({});
@@ -181,8 +188,11 @@ export function ConceptDetail() {
     if (!id || !conceptId || !concept) return;
     const title = draftTitle.trim();
     const answer = draftAnswer.trim();
+    // Empty hint drafts clear the hint; otherwise trim.
+    const hint = draftHint.trim() === "" ? null : draftHint.trim();
     const titleChanged = title !== concept.title;
     const answerChanged = answer !== concept.answer;
+    const hintChanged = (hint ?? "") !== (hintValue ?? "");
     const learnedChanged = draftLearned !== concept.learned;
 
     const renames = Object.entries(pendingRenames);
@@ -195,6 +205,7 @@ export function ConceptDetail() {
     const hasChanges =
       titleChanged ||
       answerChanged ||
+      hintChanged ||
       learnedChanged ||
       removedOrig.length > 0 ||
       addedTags.length > 0 ||
@@ -207,8 +218,8 @@ export function ConceptDetail() {
     setLoadError(null);
     setIsSaving(true);
     try {
-      if (titleChanged || answerChanged) {
-        await updateConcept(id, conceptId, { title, answer });
+      if (titleChanged || answerChanged || hintChanged) {
+        await updateConcept(id, conceptId, { title, answer, hint });
       }
       // Board-wide renames keep the tag id, so apply them before linking any
       // newly-added names that might collide with a rename target.
@@ -236,9 +247,10 @@ export function ConceptDetail() {
       }
       await persistAndRefresh();
       // The detail row alone carries the fresh updated_at for the
-      // "last reviewed" line.
+      // "last reviewed" line, and the fresh hint for the hint section.
       const detail = await getConcept(id, conceptId);
       setLastReviewed(detail.updated_at ?? null);
+      setHintValue(detail.hint ?? null);
       cancelEditing();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Failed to save concept");
@@ -655,7 +667,7 @@ export function ConceptDetail() {
                     </div>
 
                     {/* suggestions */}
-                    <div className="max-h-44 overflow-y-auto p-1.5 flex flex-col gap-0.5">
+                    <div className="tag-scrollbox max-h-44 overflow-y-auto p-1.5 flex flex-col gap-0.5">
                       {canCreateTag && (
                         <button
                           type="button"
@@ -758,6 +770,38 @@ export function ConceptDetail() {
             ) : (
               <p className="text-foreground leading-relaxed text-sm">
                 {concept.answer || <span className="text-muted-foreground italic">No answer added yet.</span>}
+              </p>
+            )}
+          </div>
+        </motion.div>
+
+        {/* hint — deliberately lower-key than the answer: translucent
+            background, dashed border, muted text so it reads as a
+            background nudge rather than primary content. */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className="flex flex-col gap-3"
+        >
+          <h2 className="text-muted-foreground/80 text-sm tracking-wide uppercase font-mono">Hint</h2>
+          <div className="bg-secondary/30 border border-dashed border-border/60 rounded-xl p-5">
+            {isEditing ? (
+              <textarea
+                value={draftHint}
+                onChange={(e) => setDraftHint(e.target.value)}
+                placeholder="Add a hint to nudge yourself toward the answer…"
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg bg-transparent border border-dashed border-border/60 text-sm text-foreground/90 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all resize-y"
+                style={{ fontFamily: "var(--font-sans)" }}
+              />
+            ) : (
+              <p className="text-muted-foreground leading-relaxed text-sm">
+                {hintValue ? (
+                  hintValue
+                ) : (
+                  <span className="text-muted-foreground/50 italic">No hint added yet.</span>
+                )}
               </p>
             )}
           </div>

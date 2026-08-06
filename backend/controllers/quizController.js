@@ -6,12 +6,13 @@ const asyncHandler = require('../middleware/asyncHandler');
  * Body: { style, tagIds?, includeKnown?, questionCount? }.
  */
 async function generateQuestions(req, res) {
-  const { style, tagIds, includeKnown, questionCount } = req.body;
+  const { style, tagIds, includeKnown, questionCount, matchAll } = req.body;
   const questions = await quizService.generateQuestions(req.userId, req.params.boardId, {
     style,
     tagIds,
     includeKnown,
     questionCount,
+    matchAll,
   });
   return res.status(200).json({ questions });
 }
@@ -21,13 +22,14 @@ async function generateQuestions(req, res) {
  * Body: { style, tagIds?, includeKnown?, timeElapsedMs, answers }.
  */
 async function recordRun(req, res) {
-  const { style, tagIds, includeKnown, timeElapsedMs, answers } = req.body;
+  const { style, tagIds, includeKnown, timeElapsedMs, answers, exactMatching } = req.body;
   const result = await quizService.recordRun(req.userId, req.params.boardId, {
     style,
     tagIds,
     includeKnown,
     timeElapsedMs,
     answers,
+    exactMatching,
   });
   return res.status(201).json(result);
 }
@@ -38,6 +40,8 @@ async function recordRun(req, res) {
  */
 async function recordRunFromSettings(req, res) {
   const { timeElapsedMs, answers } = req.body;
+  // exactMatching comes from the persisted setting — the client's flag is
+  // ignored for saved-setting runs so scoring can't be overridden client-side.
   const result = await quizService.recordRunFromSettings(
     req.userId,
     req.params.boardId,
@@ -77,6 +81,14 @@ async function getRunBreakdown(req, res) {
   return res.status(200).json(result);
 }
 
+/**
+ * DELETE /boards/:boardId/quizzes — delete every quiz run on the board.
+ */
+async function removeAll(req, res) {
+  const result = await quizService.removeAll(req.userId, req.params.boardId);
+  return res.status(200).json(result);
+}
+
 module.exports = {
   generateQuestions: asyncHandler(generateQuestions),
   recordRun: asyncHandler(recordRun),
@@ -84,4 +96,5 @@ module.exports = {
   listRuns: asyncHandler(listRuns),
   listRunsBySettings: asyncHandler(listRunsBySettings),
   getRunBreakdown: asyncHandler(getRunBreakdown),
+  removeAll: asyncHandler(removeAll),
 };

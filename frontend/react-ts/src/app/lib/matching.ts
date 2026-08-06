@@ -46,3 +46,8 @@ export function isLenientMatch(answer: string, submitted: string): boolean {
   if (a.length === 0 || b.length === 0) return false;
   return levenshtein(a, b) <= tolerance(a);
 }
+
+/** Exact match: identical after normalization (trim/lowercase) — no typo tolerance. */
+export function isExactMatch(answer: string, submitted: string): boolean {
+  return normalize(answer) === normalize(submitted);
+}

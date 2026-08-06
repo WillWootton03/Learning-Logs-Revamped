@@ -10,6 +10,8 @@ type TagState = {
   seedBoardTags: (boardId: string, tags: string[]) => void;
   addTagToPool: (boardId: string, tag: string) => void;
   removeTagFromBoard: (boardId: string, tag: string) => void;
+  /** Wipe a board's entire tag pool (e.g. after deleting all tags). */
+  clearBoardTags: (boardId: string) => void;
 };
 
 const TagContext = createContext<TagState | null>(null);
@@ -40,8 +42,17 @@ export function TagProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const clearBoardTags = useCallback((boardId: string) => {
+    setBoardTagPool((prev) => {
+      if (!(boardId in prev)) return prev;
+      const next = { ...prev };
+      delete next[boardId];
+      return next;
+    });
+  }, []);
+
   return (
-    <TagContext.Provider value={{ boardTagPool, seedBoardTags, addTagToPool, removeTagFromBoard }}>
+    <TagContext.Provider value={{ boardTagPool, seedBoardTags, addTagToPool, removeTagFromBoard, clearBoardTags }}>
       {children}
     </TagContext.Provider>
   );

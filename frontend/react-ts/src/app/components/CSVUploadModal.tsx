@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { X, Upload, FileText, CheckCircle2, AlertCircle, Plus, Download } from "lucide-react";
 import { useConcepts } from "../context/ConceptContext";
-import { importConcepts, type ImportConceptRow } from "../lib/api";
 import { useScrollLock } from "../hooks/useScrollLock";
 
 type ParsedRow = {
@@ -113,7 +112,7 @@ function parseCSV(text: string): ParsedRow[] {
  */
 export function CSVUploadModal({ boardId, open, onClose }: Props) {
   useScrollLock(open);
-  const { loadConcepts } = useConcepts();
+  const { importConcepts } = useConcepts();
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
@@ -147,16 +146,16 @@ export function CSVUploadModal({ boardId, open, onClose }: Props) {
     if (valid.length === 0 || isImporting) return;
     setIsImporting(true);
     setImportError(null);
-    const payload: ImportConceptRow[] = valid.map((r) => ({
+    const payload = valid.map((r) => ({
       prompt: r.prompt,
       answer: r.answer,
       hint: r.hint,
       tags: r.tags,
     }));
     try {
+      // The context appends the created concepts to local state, so the board
+      // page updates immediately without a refetch.
       await importConcepts(boardId, payload);
-      // Refresh the board so the newly imported concepts appear immediately.
-      await loadConcepts(boardId);
       reset();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");

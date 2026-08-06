@@ -5,7 +5,9 @@ import {
   BookOpen,
   CheckCircle2,
   Clock,
+  CornerDownLeft,
   Flame,
+  Lightbulb,
   X,
   XCircle,
 } from "lucide-react";
@@ -20,7 +22,7 @@ import {
   type QuizScoredResult,
 } from "../lib/api";
 import { QUIZ_STYLE_OPTIONS, quizStyleLabel } from "../lib/quizStyles";
-import { isLenientMatch, normalize } from "../lib/matching";
+import { isExactMatch, isLenientMatch, normalize } from "../lib/matching";
 import type { Concept } from "../types";
 
 type Phase = "question" | "revealed" | "done";
@@ -62,6 +64,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   const boardColor = board?.color ?? "#7c6af7";
   const preset = (sessionPresets[boardId] ?? []).find((p) => p.id === presetId);
   const style = preset?.style;
+  const exactMatching = preset?.exactMatching ?? false;
 
   const conceptById = useMemo(
     () => new Map((concepts[boardId] ?? []).map((c) => [c.id, c])),
@@ -80,7 +83,9 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   const [writtenInput, setWrittenInput] = useState("");
   const [inputVerdict, setInputVerdict] = useState<boolean | null>(null);
   const [quitting, setQuitting] = useState(false);
+  const [hintOpen, setHintOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [endedEarly, setEndedEarly] = useState(false);
 
   const elapsedRef = useRef(0);
   const answersRef = useRef<QuizAnswer[]>([]);
@@ -119,6 +124,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
           style: activePreset.style,
           tagIds: activePreset.tagIds ?? undefined,
           includeKnown: activePreset.includeKnown,
+          matchAllTags: activePreset.matchAllTags,
         });
         if (cancelled) return;
         setQuestions(generated);
@@ -168,6 +174,27 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
     }
   }
 
+  /**
+   * End the session early: save the run with only the questions already
+   * answered (answersRef holds just those — unanswered questions are dropped),
+   * then show the summary. If nothing was answered, there's nothing to track,
+   * so just leave the session.
+   */
+  function endEarly() {
+    if (advanceTimer.current) {
+      clearTimeout(advanceTimer.current);
+      advanceTimer.current = null;
+    }
+    setQuitting(false);
+    if (answersRef.current.length === 0) {
+      navigate(`/app/board/${boardId}`);
+      return;
+    }
+    setEndedEarly(true);
+    setPhase("done");
+    void saveRun();
+  }
+
   function scheduleAdvance(delayMs: number) {
     if (advanceTimer.current) clearTimeout(advanceTimer.current);
     advanceTimer.current = window.setTimeout(() => {
@@ -186,9 +213,46 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
     setTfSelected(null);
     setWrittenInput("");
     setInputVerdict(null);
+    setHintOpen(false);
     setPhase("question");
     setIndex((i) => i + 1);
   }
+
+  // Keep the latest advance() reachable from the Enter-to-skip handler below
+  // without re-registering the window listener on every render.
+  const advanceRef = useRef(advance);
+  useEffect(() => {
+    advanceRef.current = advance;
+  });
+  // Mirror of quitting so the key handler can ignore Enter while the quit
+  // modal is open — its buttons own the Enter key there.
+  const quittingRef = useRef(quitting);
+  useEffect(() => {
+    quittingRef.current = quitting;
+  }, [quitting]);
+
+  // While the result of a question is shown, pressing Enter skips the wait
+  // and jumps straight to the next question (cancelling the pending
+  // auto-advance so it can't double-fire). Enter coming from a text field is
+  // ignored so the very keystroke that submits a fill-in answer can't also
+  // skip the question — press Enter again afterwards to advance.
+  useEffect(() => {
+    if (phase !== "revealed") return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Enter") return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT")) return;
+      if (quittingRef.current) return;
+      e.preventDefault();
+      if (advanceTimer.current) {
+        clearTimeout(advanceTimer.current);
+        advanceTimer.current = null;
+      }
+      advanceRef.current();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [phase]);
 
   function handleTFSelect(saysTrue: boolean) {
     if (phase !== "question" || !current || current.statement === undefined) return;
@@ -220,8 +284,11 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   function handleCheckInput() {
     if (phase !== "question" || !current || !writtenInput.trim()) return;
     const concept = conceptById.get(current.conceptId);
-    // Same lenient-matching rule the backend applies when it records the run.
-    const correct = isLenientMatch(concept?.answer ?? "", writtenInput.trim());
+    // Mirrors the backend's scoring rule (lenient or exact) so the reveal
+    // screen agrees with what the server records.
+    const correct = exactMatching
+      ? isExactMatch(concept?.answer ?? "", writtenInput.trim())
+      : isLenientMatch(concept?.answer ?? "", writtenInput.trim());
     setInputVerdict(correct);
     setPhase("revealed");
     answersRef.current.push({ conceptId: current.conceptId, response: writtenInput.trim() });
@@ -298,7 +365,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
             )}
           </div>
           <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono">
-            Session complete
+            {endedEarly ? "Session ended early" : "Session complete"}
           </p>
           <h1 className="text-foreground">{preset?.name ?? "Session"}</h1>
         </motion.div>
@@ -465,6 +532,49 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
               verdict={inputVerdict}
             />
           )}
+
+          {/* hint — reveal on demand */}
+          {current?.hint && (
+            <div className="flex flex-col gap-2">
+              {hintOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="flex flex-col gap-1.5 px-4 py-3 rounded-xl bg-card border border-border"
+                >
+                  <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+                    <Lightbulb className="w-3 h-3" />
+                    Hint
+                  </span>
+                  <p className="text-sm text-foreground leading-relaxed">{current.hint}</p>
+                </motion.div>
+              ) : phase === "question" ? (
+                <button
+                  onClick={() => setHintOpen(true)}
+                  className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  Show hint
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {/* continue hint — shown while the result is on screen */}
+          {phase === "revealed" && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut", delay: 0.35 }}
+              className="flex items-center justify-center gap-2 pt-1 text-muted-foreground"
+            >
+              <span className="w-6 h-6 rounded-md border border-border flex items-center justify-center">
+                <CornerDownLeft className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-xs font-mono tracking-wide">Press Enter to continue</span>
+            </motion.div>
+          )}
         </motion.div>
       </AnimatePresence>
 
@@ -486,22 +596,31 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
               transition={{ duration: 0.18 }}
               className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl shadow-black/50"
             >
-              <h2 className="text-foreground">Quit session?</h2>
+              <h2 className="text-foreground">End session?</h2>
               <p className="text-sm text-muted-foreground">
-                Progress won't be saved. You've reviewed {index} of {total} concepts.
+                {results.length > 0
+                  ? `You've answered ${results.length} of ${total} concepts. End now to save your progress, or quit to discard it.`
+                  : `You've reviewed ${index} of ${total} concepts with nothing answered yet — ending will just leave the session.`}
               </p>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={endEarly}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  End session & save
+                </button>
+                <button
+                  onClick={() => setQuitting(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-muted-foreground text-sm hover:text-foreground hover:border-primary/30 transition-colors"
+                >
+                  Keep going
+                </button>
                 <button
                   onClick={() => navigate(`/app/board/${boardId}`)}
                   className="flex-1 py-2.5 rounded-xl border border-rose-500/30 text-rose-400 text-sm hover:bg-rose-500/10 transition-colors"
                 >
-                  Quit
-                </button>
-                <button
-                  onClick={() => setQuitting(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
-                >
-                  Keep going
+                  Quit without saving
                 </button>
               </div>
             </motion.div>
@@ -560,8 +679,9 @@ function TrueFalseMode({
 
         {revealed && (
           <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
             className={`text-xs font-mono mt-1 ${isTrue ? "text-emerald-400" : "text-rose-400"}`}
           >
             {isTrue ? "This is the correct answer" : `Correct answer: ${concept?.answer}`}
@@ -590,6 +710,7 @@ function TrueFalseMode({
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: "easeOut", delay: 0.08 }}
           className={`flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-mono ${
             userCorrect
               ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
@@ -654,10 +775,10 @@ function MultipleChoiceMode({
               key={i}
               onClick={() => onSelect(option)}
               disabled={revealed}
-              className={`flex items-center gap-4 px-5 py-4 rounded-xl border text-sm text-left transition-all ${cls}`}
+              className={`flex items-center gap-4 px-5 py-4 rounded-xl border text-sm text-left transition-all duration-300 ${cls}`}
             >
               <span
-                className={`w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center text-[11px] font-mono transition-colors ${
+                className={`w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center text-[11px] font-mono transition-colors duration-300 ${
                   revealed && isCorrect
                     ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
                     : revealed && isSelected
@@ -681,8 +802,9 @@ function MultipleChoiceMode({
 
       {revealed && (
         <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: "easeOut", delay: 0.15 }}
           className="text-xs text-muted-foreground font-mono text-center"
         >
           Next concept in a moment…
@@ -708,6 +830,14 @@ function InputAnswerMode({
   onCheck: () => void;
   verdict: boolean | null;
 }) {
+  // The parent keys this component by question index, so it remounts for
+  // every new question — focus the field immediately so typing can start
+  // without a click.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
     <div className="flex flex-col gap-5">
       <div className="bg-card border border-border rounded-2xl p-8">
@@ -722,6 +852,7 @@ function InputAnswerMode({
       {phase === "question" && (
         <div className="flex flex-col gap-3">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={(e) => {
@@ -749,6 +880,7 @@ function InputAnswerMode({
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
           className="flex flex-col gap-4"
         >
           <div className="grid grid-cols-2 gap-3">
@@ -771,6 +903,7 @@ function InputAnswerMode({
           <motion.p
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut", delay: 0.08 }}
             className={`flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-mono ${
               verdict
                 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"

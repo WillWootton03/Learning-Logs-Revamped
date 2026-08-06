@@ -1,21 +1,24 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { CheckCircle2, Circle, Plus, Tag } from "lucide-react";
+import { CheckCircle2, Circle, Plus, Tag, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
 import { listTags } from "../lib/api";
 import { TagModal } from "../components/TagModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { BackButton } from "../components/BackButton";
 
 export function AllTags() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { boards, isBoardsLoading } = useBoard();
-  const { concepts, loadConcepts } = useConcepts();
+  const { concepts, loadConcepts, deleteAllTags } = useConcepts();
   const [boardTags, setBoardTags] = useState<{ tag_id: string; name: string }[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Tracks the board whose data has finished loading; while it doesn't match
   // the current route the page shows a spinner. Using derived state (rather
   // than resetting flags in the effect) keeps all writes in callbacks.
@@ -54,6 +57,24 @@ export function AllTags() {
     if (!id) return;
     await loadConcepts(id);
     setBoardTags(await listTags(id));
+  }
+
+  async function handleDeleteAll() {
+    if (!id) return;
+    setIsDeleting(true);
+    try {
+      await deleteAllTags(id);
+      setDeleteOpen(false);
+      // The backend removed the board's tags; reset local sources so the
+      // page reflects the empty state without a full reload.
+      setBoardTags([]);
+      await reload();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to delete tags");
+      setDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   if (isBoardsLoading) {
@@ -96,13 +117,24 @@ export function AllTags() {
             <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
             <h1 className="text-foreground">All Tags</h1>
           </div>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New tag
-          </button>
+          <div className="flex items-center gap-2">
+            {tags.length > 0 && (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete all
+              </button>
+            )}
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New tag
+            </button>
+          </div>
         </div>
       </div>
 
@@ -153,7 +185,7 @@ export function AllTags() {
                   <div className="h-full rounded-full bg-primary/60" style={{ width: `${progress}%` }} />
                 </div>
 
-                <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                <div className="tag-scrollbox flex flex-col gap-1.5 max-h-40 overflow-y-auto">
                   {tagConcepts.length === 0 ? (
                     <p className="px-2 py-1.5 text-xs text-muted-foreground">No concepts with this tag yet.</p>
                   ) : (
@@ -186,6 +218,14 @@ export function AllTags() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={reload}
+      />
+      <ConfirmModal
+        open={deleteOpen}
+        title="Delete all tags"
+        description={`This permanently deletes all ${tags.length} tags on this board and removes them from every concept. This cannot be undone.`}
+        busy={isDeleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteAll}
       />
     </main>
   );

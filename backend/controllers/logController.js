@@ -43,10 +43,19 @@ async function remove(req, res) {
   return res.status(200).json(result);
 }
 
+/**
+ * DELETE /boards/:boardId/logs — delete every log on the board.
+ */
+async function removeAll(req, res) {
+  const result = await logService.removeAll(req.userId, req.params.boardId);
+  return res.status(200).json(result);
+}
+
 module.exports = {
   list: asyncHandler(list),
   create: asyncHandler(create),
   getById: asyncHandler(getById),
   update: asyncHandler(update),
   remove: asyncHandler(remove),
+  removeAll: asyncHandler(removeAll),
 };

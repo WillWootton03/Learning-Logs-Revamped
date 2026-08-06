@@ -120,10 +120,30 @@ async function remove(userId, boardId, logId) {
   return result.rowCount > 0;
 }
 
+/**
+ * Delete every log on a board, joined through boards so only the owner's
+ * logs are removed.
+ * @param {string} userId - Board owner's user id (UUID).
+ * @param {string} boardId - Board id (UUID).
+ * @returns {Promise<number>} Number of logs deleted.
+ */
+async function removeAll(userId, boardId) {
+  const result = await pool.query(
+    `DELETE FROM logs l
+     USING boards b
+     WHERE l.board_id = b.board_id
+       AND b.board_id = $1
+       AND b.user_id = $2`,
+    [boardId, userId]
+  );
+  return result.rowCount;
+}
+
 module.exports = {
   findAllByBoard,
   findById,
   create,
   update,
   remove,
+  removeAll,
 };

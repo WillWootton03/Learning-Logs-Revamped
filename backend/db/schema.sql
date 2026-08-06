@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS quiz_settings (
   name             TEXT NOT NULL,
   style            TEXT NOT NULL CHECK (style IN ('true_false', 'multiple_choice', 'fill_in')),
   include_known    BOOLEAN NOT NULL DEFAULT false,
+  exact_matching   BOOLEAN NOT NULL DEFAULT false,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -117,5 +118,6 @@ CREATE INDEX IF NOT EXISTS idx_quiz_questions_concept_id ON quiz_questions (conc
 -- deployments pick these up via ADD COLUMN IF NOT EXISTS on re-run.
 ALTER TABLE boards ADD COLUMN IF NOT EXISTS subject TEXT NOT NULL DEFAULT 'Other';
 ALTER TABLE boards ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '#7c6af7';
+ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS exact_matching BOOLEAN NOT NULL DEFAULT false;
 
 

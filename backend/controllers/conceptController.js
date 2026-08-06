@@ -78,6 +78,14 @@ async function importMany(req, res) {
   return res.status(201).json({ concepts });
 }
 
+/**
+ * DELETE /boards/:boardId/concepts — delete every concept on the board.
+ */
+async function removeAll(req, res) {
+  const result = await conceptService.removeAll(req.userId, req.params.boardId);
+  return res.status(200).json(result);
+}
+
 module.exports = {
   list: asyncHandler(list),
   create: asyncHandler(create),
@@ -86,4 +94,5 @@ module.exports = {
   remove: asyncHandler(remove),
   setLearned: asyncHandler(setLearned),
   importMany: asyncHandler(importMany),
+  removeAll: asyncHandler(removeAll),
 };

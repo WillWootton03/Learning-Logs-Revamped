@@ -111,10 +111,23 @@ async function remove(userId, boardId, logId) {
   return { log_id: logId };
 }
 
+/**
+ * Delete every log on a board. Verified against ownership via the repo's SQL
+ * join.
+ * @param {string} userId
+ * @param {string} boardId
+ * @returns {Promise<{deleted: number}>}
+ */
+async function removeAll(userId, boardId) {
+  const deleted = await logRepository.removeAll(userId, boardId);
+  return { deleted };
+}
+
 module.exports = {
   list,
   getById,
   create,
   update,
   remove,
+  removeAll,
 };

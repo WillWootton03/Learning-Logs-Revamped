@@ -9,6 +9,7 @@ router.use(authenticate);
 
 router.get('/', logController.list);
 router.post('/', logController.create);
+router.delete('/', logController.removeAll);
 router.get('/:logId', logController.getById);
 router.put('/:logId', logController.update);
 router.delete('/:logId', logController.remove);

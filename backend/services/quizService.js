@@ -4,7 +4,7 @@ const conceptRepository = require('../repositories/conceptRepository');
 const tagRepository = require('../repositories/tagRepository');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
-const { normalize, isLenientMatch } = require('./matching');
+const { normalize, isLenientMatch, isExactMatch } = require('./matching');
 
 const QUIZ_STYLES = ['true_false', 'multiple_choice', 'fill_in'];
 const MCQ_OPTION_COUNT = 4; // 1 correct + 3 distractors
@@ -127,11 +127,15 @@ function buildQuestion(style, concept, pool) {
  * @param {string} style
  * @param {object} concept - Concept row (has .answer).
  * @param {{response: string|boolean, statement?: string}} answer
+ * @param {boolean} exactMatching - When true, fill-in answers must match
+ *   exactly (normalized) — no typo tolerance.
  * @returns {boolean}
  */
-function scoreAnswer(style, concept, answer) {
+function scoreAnswer(style, concept, answer, exactMatching = false) {
   if (style === 'fill_in') {
-    return isLenientMatch(concept.answer, answer.response);
+    return exactMatching
+      ? isExactMatch(concept.answer, answer.response)
+      : isLenientMatch(concept.answer, answer.response);
   }
   if (style === 'multiple_choice') {
     return normalize(answer.response) === normalize(concept.answer);
@@ -151,11 +155,11 @@ function scoreAnswer(style, concept, answer) {
  * options/statements) for the client to display; no state is kept server-side.
  * @param {string} userId
  * @param {string} boardId
- * @param {{style: string, tagIds?: string[], includeKnown?: boolean, questionCount?: number}} params
+ * @param {{style: string, tagIds?: string[], includeKnown?: boolean, questionCount?: number, matchAll?: boolean}} params
  * @returns {Promise<Array<object>>}
  * @throws {AppError} 400 on invalid input, 404 if nothing eligible.
  */
-async function generateQuestions(userId, boardId, { style, tagIds, includeKnown = false, questionCount }) {
+async function generateQuestions(userId, boardId, { style, tagIds, includeKnown = false, questionCount, matchAll = false }) {
   if (!validateStyle(style)) {
     throw new AppError(400, `style must be one of: ${QUIZ_STYLES.join(', ')}`);
   }
@@ -166,6 +170,7 @@ async function generateQuestions(userId, boardId, { style, tagIds, includeKnown 
   const pool = await quizRepository.findEligibleConcepts(userId, boardId, {
     tagIds: resolvedTagIds,
     includeKnown,
+    matchAll,
   });
   if (pool.length === 0) {
     throw new AppError(404, 'No concepts are eligible for this quiz');
@@ -190,12 +195,13 @@ async function generateQuestions(userId, boardId, { style, tagIds, includeKnown 
  *   quizSettingsId: string|null,
  *   style: string,
  *   timeElapsedMs: number,
- *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>
+ *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>,
+ *   exactMatching?: boolean
  * }} data
  * @returns {Promise<{run: object, results: Array<object>}>}
  * @throws {AppError} 400 on unknown concepts.
  */
-async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers }) {
+async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers, exactMatching = false }) {
   const conceptIds = answers.map((a) => a.conceptId);
   for (const id of conceptIds) {
     if (!isUuid(id)) {
@@ -212,7 +218,7 @@ async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedM
     const concept = conceptById.get(answer.conceptId);
     return {
       conceptId: answer.conceptId,
-      answeredCorrectly: scoreAnswer(style, concept, answer),
+      answeredCorrectly: scoreAnswer(style, concept, answer, exactMatching),
     };
   });
 
@@ -237,7 +243,7 @@ async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedM
  * @returns {Promise<{run: object, results: Array<object>}>}
  * @throws {AppError} 400 on invalid input, 404 if settings missing.
  */
-async function recordRun(userId, boardId, { quizSettingsId = null, style, timeElapsedMs, answers }) {
+async function recordRun(userId, boardId, { quizSettingsId = null, style, timeElapsedMs, answers, exactMatching = false }) {
   if (!validateStyle(style)) {
     throw new AppError(400, `style must be one of: ${QUIZ_STYLES.join(', ')}`);
   }
@@ -254,7 +260,7 @@ async function recordRun(userId, boardId, { quizSettingsId = null, style, timeEl
     const setting = await quizSettingsRepository.findById(userId, boardId, quizSettingsId);
     if (!setting) throw new AppError(404, 'Quiz settings not found');
   }
-  return persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers });
+  return persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers, exactMatching });
 }
 
 /**
@@ -276,6 +282,9 @@ async function recordRunFromSettings(userId, boardId, quizSettingsId, { timeElap
     style: setting.style,
     timeElapsedMs,
     answers,
+    // The setting's persisted matching mode is authoritative — the client
+    // never gets to override how its own run is scored.
+    exactMatching: setting.exact_matching,
   });
 }
 
@@ -304,6 +313,18 @@ async function listRunsBySettings(userId, boardId, quizSettingsId) {
 }
 
 /**
+ * Delete every quiz run on a board (history). Verified against ownership via
+ * the repo's SQL join.
+ * @param {string} userId
+ * @param {string} boardId
+ * @returns {Promise<{deleted: number}>}
+ */
+async function removeAll(userId, boardId) {
+  const deleted = await quizRepository.removeAll(userId, boardId);
+  return { deleted };
+}
+
+/**
  * Fetch a run summary plus its per-question breakdown.
  * @param {string} userId
  * @param {string} boardId
@@ -325,4 +346,5 @@ module.exports = {
   listRuns,
   listRunsBySettings,
   getRunBreakdown,
+  removeAll,
 };

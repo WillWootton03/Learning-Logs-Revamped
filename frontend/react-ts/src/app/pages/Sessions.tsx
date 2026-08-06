@@ -1,20 +1,23 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { motion } from "motion/react";
-import { BarChart2, BookOpen, CalendarDays, CheckCircle2, ChevronRight, Clock, Flame, Plus } from "lucide-react";
+import { BarChart2, BookOpen, CalendarDays, CheckCircle2, ChevronRight, Clock, Flame, Plus, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useSessions } from "../context/SessionContext";
 import { SessionModal } from "../components/SessionModal";
+import { ConfirmModal } from "../components/ConfirmModal";
 import { BackButton } from "../components/BackButton";
 
 export function Sessions() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { boards, isBoardsLoading } = useBoard();
-  const { sessions, loadSessions } = useSessions();
+  const { sessions, loadSessions, deleteAllSessions } = useSessions();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const board = boards.find((b) => b.id === id);
   const boardSessions = id ? sessions[id] ?? [] : [];
@@ -46,6 +49,20 @@ export function Sessions() {
   const avgPerSession = boardSessions.length ? Math.round(totalConcepts / boardSessions.length) : 0;
   const totalMinutes = boardSessions.reduce((sum, s) => sum + Math.round(s.timeElapsedMs / 60_000), 0);
 
+  async function handleDeleteAll() {
+    if (!id) return;
+    setIsDeleting(true);
+    try {
+      await deleteAllSessions(id);
+      setDeleteOpen(false);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to delete sessions");
+      setDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (isBoardsLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -74,13 +91,24 @@ export function Sessions() {
             <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
             <h1 className="text-foreground">Sessions</h1>
           </div>
-          <button
-            onClick={() => setSessionOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Start new session
-          </button>
+          <div className="flex items-center gap-2">
+            {boardSessions.length > 0 && (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete all
+              </button>
+            )}
+            <button
+              onClick={() => setSessionOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Start new session
+            </button>
+          </div>
         </div>
       </div>
 
@@ -174,6 +202,14 @@ export function Sessions() {
         open={sessionOpen}
         onClose={() => setSessionOpen(false)}
         onStart={(presetId) => navigate(`/app/board/${id}/sessions/play?presetId=${presetId}`)}
+      />
+      <ConfirmModal
+        open={deleteOpen}
+        title="Delete all sessions"
+        description={`This permanently deletes all ${boardSessions.length} session records on this board. This cannot be undone.`}
+        busy={isDeleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteAll}
       />
     </main>
   );

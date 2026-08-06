@@ -65,4 +65,15 @@ function isLenientMatch(answer, submitted) {
   return levenshtein(a, b) <= tolerance(a);
 }
 
-module.exports = { normalize, levenshtein, isLenientMatch };
+/**
+ * Exact match: both sides must be identical after normalization (trim,
+ * lowercase, whitespace-collapsed). No typo tolerance.
+ * @param {string} answer - Reference answer.
+ * @param {string} submitted - The user's typed response.
+ * @returns {boolean}
+ */
+function isExactMatch(answer, submitted) {
+  return normalize(answer) === normalize(submitted);
+}
+
+module.exports = { normalize, levenshtein, isLenientMatch, isExactMatch };

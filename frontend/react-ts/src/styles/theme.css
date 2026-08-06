@@ -194,3 +194,44 @@
     line-height: 1.5;
   }
 }
+
+/**
+* Themed scrollbars for the app's scrollboxes (tag pickers, suggestion
+* dropdowns). A slim, rounded thumb that fades from the primary color toward
+* the accent, sitting on a transparent track so it reads as a floating pill.
+* Driven entirely by theme variables, so it adapts to light/dark.
+*/
+.tag-scrollbox {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 55%, transparent) transparent;
+}
+
+.tag-scrollbox::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.tag-scrollbox::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tag-scrollbox::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 55%, transparent),
+    color-mix(in srgb, var(--accent) 35%, transparent)
+  );
+  border-radius: 999px;
+}
+
+.tag-scrollbox::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 85%, transparent),
+    color-mix(in srgb, var(--accent) 60%, transparent)
+  );
+}
+
+.tag-scrollbox::-webkit-scrollbar-corner {
+  background: transparent;
+}

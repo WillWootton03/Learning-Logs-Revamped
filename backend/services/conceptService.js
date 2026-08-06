@@ -226,6 +226,18 @@ async function importMany(userId, boardId, rows) {
   return conceptRepository.importMany(userId, boardId, cleaned);
 }
 
+/**
+ * Delete every concept on a board. Verified against ownership via the repo's
+ * SQL join; a foreign or missing board deletes nothing.
+ * @param {string} userId
+ * @param {string} boardId
+ * @returns {Promise<{deleted: number}>}
+ */
+async function removeAll(userId, boardId) {
+  const deleted = await conceptRepository.removeAll(userId, boardId);
+  return { deleted };
+}
+
 module.exports = {
   list,
   getById,
@@ -234,4 +246,5 @@ module.exports = {
   remove,
   setLearned,
   importMany,
+  removeAll,
 };

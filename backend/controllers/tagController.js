@@ -103,6 +103,14 @@ async function listConceptTags(req, res) {
   return res.status(200).json({ tags });
 }
 
+/**
+ * DELETE /boards/:boardId/tags — delete every tag on the board.
+ */
+async function removeAll(req, res) {
+  const result = await tagService.removeAll(req.userId, req.params.boardId);
+  return res.status(200).json(result);
+}
+
 module.exports = {
   list: asyncHandler(list),
   create: asyncHandler(create),
@@ -110,6 +118,7 @@ module.exports = {
   getById: asyncHandler(getById),
   update: asyncHandler(update),
   remove: asyncHandler(remove),
+  removeAll: asyncHandler(removeAll),
   linkConcept: asyncHandler(linkConcept),
   linkMany: asyncHandler(linkMany),
   unlinkConcept: asyncHandler(unlinkConcept),

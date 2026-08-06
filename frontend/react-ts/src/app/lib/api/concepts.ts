@@ -11,6 +11,7 @@ type ConceptRow = {
   concept_id: string;
   prompt: string;
   answer: string;
+  hint?: string | null;
   times_answered_correctly: number;
   tags?: string[] | null;
 };
@@ -25,6 +26,7 @@ function toConcept(row: ConceptRow, masteryThreshold: number): Concept {
     id: row.concept_id,
     title: row.prompt,
     answer: row.answer,
+    hint: row.hint ?? null,
     learned: row.times_answered_correctly >= masteryThreshold,
     tags: row.tags ?? [],
     // The list endpoint doesn't return timestamps (summary only) — the board
@@ -76,11 +78,11 @@ export async function importConcepts(boardId: string, rows: ImportConceptRow[]) 
   return res.concepts;
 }
 
-/** Update a concept's prompt and/or answer. Fields not passed are left unchanged. */
+/** Update a concept's prompt, answer, and/or hint. Fields not passed are left unchanged. */
 export function updateConcept(
   boardId: string,
   conceptId: string,
-  data: { prompt?: string; answer?: string }
+  data: { prompt?: string; answer?: string; hint?: string | null }
 ) {
   return request<ConceptRow>(`/boards/${boardId}/concepts/${conceptId}`, {
     method: "PUT",
@@ -90,6 +92,13 @@ export function updateConcept(
 
 export function deleteConcept(boardId: string, conceptId: string) {
   return request<{ concept_id: string }>(`/boards/${boardId}/concepts/${conceptId}`, {
+    method: "DELETE",
+  });
+}
+
+/** Delete every concept on a board. */
+export function deleteAllConcepts(boardId: string) {
+  return request<{ deleted: number }>(`/boards/${boardId}/concepts`, {
     method: "DELETE",
   });
 }
@@ -169,6 +178,13 @@ export function updateTag(boardId: string, tagId: string, name: string) {
 /** Delete a tag from the board (unlinks it from all concepts). */
 export function deleteTag(boardId: string, tagId: string) {
   return request<{ tag_id: string }>(`/boards/${boardId}/tags/${tagId}`, {
+    method: "DELETE",
+  });
+}
+
+/** Delete every tag on a board (unlinks them from all concepts). */
+export function deleteAllTags(boardId: string) {
+  return request<{ deleted: number }>(`/boards/${boardId}/tags`, {
     method: "DELETE",
   });
 }

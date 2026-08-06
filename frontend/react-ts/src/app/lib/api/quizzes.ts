@@ -37,10 +37,17 @@ export type QuizScoredResult = {
   answeredCorrectly: boolean;
 };
 
-/** Generate a quiz's questions for a board. */
+/** Generate a quiz's questions for a board. `matchAllTags` flips the tag
+ * filter from "any selected tag" to "every selected tag". */
 export async function generateQuestions(
   boardId: string,
-  params: { style: QuizStyle; tagIds?: string[] | null; includeKnown?: boolean; questionCount?: number }
+  params: {
+    style: QuizStyle;
+    tagIds?: string[] | null;
+    includeKnown?: boolean;
+    questionCount?: number;
+    matchAllTags?: boolean;
+  }
 ): Promise<QuizQuestion[]> {
   const res = await request<{ questions: QuizQuestion[] }>(`/boards/${boardId}/quizzes/generate`, {
     method: "POST",
@@ -49,12 +56,14 @@ export async function generateQuestions(
       tagIds: params.tagIds ?? undefined,
       includeKnown: params.includeKnown ?? false,
       questionCount: params.questionCount,
+      matchAll: params.matchAllTags ?? false,
     }),
   });
   return res.questions;
 }
 
-/** Record a completed run linked to a saved setting. */
+/** Record a completed run linked to a saved setting. Scoring mode (lenient
+ * vs. exact) is read from the persisted setting server-side. */
 export async function recordRunFromSettings(
   boardId: string,
   settingsId: string,

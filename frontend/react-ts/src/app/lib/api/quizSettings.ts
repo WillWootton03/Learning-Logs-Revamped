@@ -14,6 +14,7 @@ type SettingsRow = {
   name: string;
   style: QuizStyle;
   include_known: boolean;
+  exact_matching: boolean;
   tag_ids: string[];
 };
 
@@ -24,6 +25,10 @@ function toPreset(row: SettingsRow): SessionPreset {
     style: row.style,
     includeKnown: row.include_known,
     tagIds: row.tag_ids.length > 0 ? row.tag_ids : null,
+    // Match-all tag mode is frontend-only state (not persisted server-side),
+    // so presets restored from the backend default to the inclusive "any" mode.
+    matchAllTags: false,
+    exactMatching: row.exact_matching,
   };
 }
 
@@ -34,7 +39,7 @@ export async function listQuizSettings(boardId: string) {
 
 export function createQuizSettings(
   boardId: string,
-  data: { name: string; style: QuizStyle; includeKnown: boolean; tagIds: string[] }
+  data: { name: string; style: QuizStyle; includeKnown: boolean; exactMatching: boolean; tagIds: string[] }
 ) {
   return request<SettingsRow>(`/boards/${boardId}/quiz-settings`, {
     method: "POST",
@@ -42,16 +47,17 @@ export function createQuizSettings(
       name: data.name,
       style: data.style,
       includeKnown: data.includeKnown,
+      exactMatching: data.exactMatching,
       tagIds: data.tagIds,
     }),
   }).then(toPreset);
 }
 
-/** Update a setting's name/style/include-known. Tags are managed separately. */
+/** Update a setting's name/style/include-known/exact-matching. Tags are managed separately. */
 export function updateQuizSettings(
   boardId: string,
   settingsId: string,
-  data: { name?: string; style?: QuizStyle; includeKnown?: boolean }
+  data: { name?: string; style?: QuizStyle; includeKnown?: boolean; exactMatching?: boolean }
 ) {
   return request<SettingsRow>(`/boards/${boardId}/quiz-settings/${settingsId}`, {
     method: "PUT",
