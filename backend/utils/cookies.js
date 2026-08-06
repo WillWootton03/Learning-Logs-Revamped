@@ -47,7 +47,8 @@ function setAuthCookies(res, { accessToken, refreshToken }) {
 }
 
 /**
- * Write only the access token cookie. Used by /auth/refresh, which leaves the
+ * Write only the access token cookie. Used by /auth/refresh and by the
+ * authenticate middleware's transparent refresh, both of which leave the
  * static refresh cookie untouched.
  * @param {object} res - Express response.
  * @param {string} accessToken

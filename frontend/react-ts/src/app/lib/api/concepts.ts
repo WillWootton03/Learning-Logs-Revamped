@@ -38,10 +38,33 @@ export async function listConcepts(boardId: string, masteryThreshold: number) {
   return res.concepts.map((row) => toConcept(row, masteryThreshold));
 }
 
+/**
+ * Fetch a single concept's detail row. The get-by-id endpoint is the only one
+ * that returns the full columns (hint, updated_at), so this is used for the
+ * concept detail page's "last reviewed" line.
+ */
+export async function getConcept(boardId: string, conceptId: string) {
+  return request<ConceptRow & { updated_at: string | null }>(
+    `/boards/${boardId}/concepts/${conceptId}`
+  );
+}
+
 export function createConcept(boardId: string, data: { prompt: string; answer: string }) {
   return request<ConceptRow>(`/boards/${boardId}/concepts`, {
     method: "POST",
     body: JSON.stringify({ prompt: data.prompt, answer: data.answer }),
+  });
+}
+
+/** Update a concept's prompt and/or answer. Fields not passed are left unchanged. */
+export function updateConcept(
+  boardId: string,
+  conceptId: string,
+  data: { prompt?: string; answer?: string }
+) {
+  return request<ConceptRow>(`/boards/${boardId}/concepts/${conceptId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
   });
 }
 
@@ -80,4 +103,28 @@ export function linkTags(boardId: string, conceptId: string, tagIds: string[]) {
     `/boards/${boardId}/concepts/${conceptId}/tags`,
     { method: "PUT", body: JSON.stringify({ tagIds }) }
   );
+}
+
+/** List the tags attached to a concept, with their ids (needed to rename/unlink). */
+export async function listConceptTags(boardId: string, conceptId: string) {
+  const res = await request<{ tags: TagRow[] }>(
+    `/boards/${boardId}/concepts/${conceptId}/tags`
+  );
+  return res.tags;
+}
+
+/** Unlink a tag from a concept. */
+export function unlinkTag(boardId: string, conceptId: string, tagId: string) {
+  return request<{ concept_id: string }>(
+    `/boards/${boardId}/concepts/${conceptId}/tags/${tagId}`,
+    { method: "DELETE" }
+  );
+}
+
+/** Rename a tag on the board. */
+export function updateTag(boardId: string, tagId: string, name: string) {
+  return request<TagRow>(`/boards/${boardId}/tags/${tagId}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
 }

@@ -6,6 +6,7 @@ import {
   linkTags,
   listConcepts,
   listTags,
+  updateConcept as apiUpdateConcept,
 } from "../lib/api";
 import { useBoard } from "./BoardContext";
 import { useTags } from "./TagContext";
@@ -15,6 +16,8 @@ type ConceptState = {
   concepts: Record<string, Concept[]>;
   loadConcepts: (boardId: string) => Promise<void>;
   createConcept: (boardId: string, input: { prompt: string; answer: string; tags: string[] }) => Promise<Concept>;
+  /** Persist an edit to a concept's title/answer on the backend, then update local state. */
+  updateConcept: (boardId: string, conceptId: string, changes: { title?: string; answer?: string }) => Promise<void>;
   /** Local, non-persisted add — used by flows that manage persistence themselves. */
   addConcept: (boardId: string, concept: Concept) => void;
   updateConceptTags: (boardId: string, conceptId: string, tags: string[]) => void;
@@ -108,6 +111,24 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
     setConcepts((prev) => ({ ...prev, [boardId]: [...(prev[boardId] ?? []), concept] }));
   }
 
+  const updateConcept = useCallback(
+    async (boardId: string, conceptId: string, changes: { title?: string; answer?: string }) => {
+      const row = await apiUpdateConcept(boardId, conceptId, {
+        prompt: changes.title,
+        answer: changes.answer,
+      });
+      setConcepts((prev) => ({
+        ...prev,
+        [boardId]: (prev[boardId] ?? []).map((c) =>
+          c.id === conceptId
+            ? { ...c, title: row.prompt, answer: row.answer }
+            : c
+        ),
+      }));
+    },
+    []
+  );
+
   function updateConceptTags(boardId: string, conceptId: string, tags: string[]) {
     setConcepts((prev) => ({
       ...prev,
@@ -135,6 +156,7 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
         concepts,
         loadConcepts,
         createConcept,
+        updateConcept,
         addConcept,
         updateConceptTags,
         toggleConceptLearned,

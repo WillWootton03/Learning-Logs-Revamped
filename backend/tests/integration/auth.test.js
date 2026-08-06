@@ -165,6 +165,78 @@ describe('POST /auth/refresh', () => {
   });
 });
 
+describe('authenticate middleware (pure auth — refresh lives on /auth/refresh)', () => {
+  /**
+   * The middleware only checks the access token. When it is missing or
+   * expired the request gets a clean 401 — the client then calls the
+   * dedicated POST /auth/refresh endpoint itself (see the flow test below).
+   * This keeps the middleware single-purpose and makes token renewals
+   * visible in the server logs as /auth/refresh calls.
+   */
+  it('returns 401 when the access token is expired, even with a valid refresh cookie', async () => {
+    const reg = await request(app).post('/auth/register').send(VALID_USER).expect(201);
+    const refresh = extractCookie(reg.headers['set-cookie'], 'refresh_token');
+
+    // Expired/garbage access token. The middleware must NOT mint a new one —
+    // that is /auth/refresh's job — so the request fails with 401 and the
+    // client (not under test here) would call /auth/refresh and retry.
+    const res = await request(app)
+      .get('/users/me')
+      .set('Cookie', `access_token=expired.garbage.jwt; refresh_token=${refresh}`);
+
+    expect(res.status).toBe(401);
+    // No access cookie should be written back by the middleware.
+    expect(extractCookie(res.headers['set-cookie'], 'access_token')).toBeNull();
+  });
+
+  it('returns 401 on a protected route with only a refresh cookie', async () => {
+    const reg = await request(app).post('/auth/register').send(VALID_USER).expect(201);
+    const refresh = extractCookie(reg.headers['set-cookie'], 'refresh_token');
+
+    const res = await request(app).get('/users/me').set('Cookie', `refresh_token=${refresh}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 when both access and refresh tokens are invalid', async () => {
+    const res = await request(app)
+      .get('/users/me')
+      .set('Cookie', 'access_token=garbage; refresh_token=also-garbage');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 when no cookies are present at all', async () => {
+    const res = await request(app).get('/users/me');
+    expect(res.status).toBe(401);
+  });
+
+  it('supports the client refresh flow: 401, then /auth/refresh, then retry succeeds', async () => {
+    const reg = await request(app).post('/auth/register').send(VALID_USER).expect(201);
+    const refresh = extractCookie(reg.headers['set-cookie'], 'refresh_token');
+
+    // 1. Expired access token -> the middleware returns 401 (no silent mint).
+    const denied = await request(app)
+      .get('/users/me')
+      .set('Cookie', `access_token=expired.garbage.jwt; refresh_token=${refresh}`);
+    expect(denied.status).toBe(401);
+
+    // 2. The client then calls POST /auth/refresh with the still-valid refresh
+    //    cookie and receives a fresh access token in a new cookie.
+    const refreshed = await request(app)
+      .post('/auth/refresh')
+      .set('Cookie', `refresh_token=${refresh}`);
+    expect(refreshed.status).toBe(200);
+    const newAccess = extractCookie(refreshed.headers['set-cookie'], 'access_token');
+    expect(newAccess).toBeDefined();
+
+    // 3. Retrying the original request with the fresh access token succeeds.
+    const retry = await request(app)
+      .get('/users/me')
+      .set('Cookie', `access_token=${newAccess}`);
+    expect(retry.status).toBe(200);
+    expect(retry.body.email).toBe(VALID_USER.email);
+  });
+});
+
 describe('GET /auth/google', () => {
   it('redirects to the Google consent screen', async () => {
     const res = await request(app).get('/auth/google');
