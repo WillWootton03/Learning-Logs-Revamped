@@ -1,4 +1,5 @@
 const logRepository = require('../repositories/logRepository');
+const cache = require('./cache');
 const AppError = require('./AppError');
 
 const MAX_TITLE_LENGTH = 120;
@@ -23,13 +24,19 @@ function validateContent(content) {
 }
 
 /**
- * List all logs on a board the user owns.
+ * List all logs on a board the user owns. Served from the 30-minute Redis
+ * cache; a miss hits Postgres and repopulates.
  * @param {string} userId
  * @param {string} boardId
  * @returns {Promise<Array<object>>}
  */
 async function list(userId, boardId) {
-  return logRepository.findAllByBoard(userId, boardId);
+  const key = cache.boardKey(userId, boardId, 'logs');
+  const cached = await cache.getJSON(key);
+  if (cached) return cached;
+  const rows = await logRepository.findAllByBoard(userId, boardId);
+  await cache.setJSON(key, rows);
+  return rows;
 }
 
 /**
@@ -63,6 +70,7 @@ async function create(userId, boardId, { title, content }) {
   }
   const log = await logRepository.create(userId, boardId, { title: title.trim(), content: content ?? '' });
   if (!log) throw new AppError(404, 'Board not found');
+  await cache.invalidateBoard(userId, boardId);
   return log;
 }
 
@@ -94,6 +102,7 @@ async function update(userId, boardId, logId, { title, content }) {
   }
   const log = await logRepository.update(userId, boardId, logId, changes);
   if (!log) throw new AppError(404, 'Log not found');
+  await cache.invalidateBoard(userId, boardId);
   return log;
 }
 
@@ -108,6 +117,7 @@ async function update(userId, boardId, logId, { title, content }) {
 async function remove(userId, boardId, logId) {
   const deleted = await logRepository.remove(userId, boardId, logId);
   if (!deleted) throw new AppError(404, 'Log not found');
+  await cache.invalidateBoard(userId, boardId);
   return { log_id: logId };
 }
 
@@ -120,6 +130,7 @@ async function remove(userId, boardId, logId) {
  */
 async function removeAll(userId, boardId) {
   const deleted = await logRepository.removeAll(userId, boardId);
+  await cache.invalidateBoard(userId, boardId);
   return { deleted };
 }
 

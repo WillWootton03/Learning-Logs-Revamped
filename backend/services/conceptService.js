@@ -1,4 +1,5 @@
 const conceptRepository = require('../repositories/conceptRepository');
+const cache = require('./cache');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
 
@@ -37,6 +38,9 @@ function validateHint(hint) {
 
 /**
  * List all concepts on a board the user owns, optionally filtered to a tag.
+ * The unfiltered list is served from the 30-minute Redis cache when available;
+ * a miss hits Postgres and repopulates the cache. Tag-filtered reads go
+ * straight to the database (rare, and the frontend filters client-side).
  * @param {string} userId
  * @param {string} boardId
  * @param {string|null} tagId - Optional tag id (UUID) to filter by.
@@ -47,7 +51,15 @@ async function list(userId, boardId, tagId) {
   if (tagId !== undefined && tagId !== null && !isUuid(tagId)) {
     throw new AppError(400, 'tag must be a valid UUID');
   }
-  return conceptRepository.findAllByBoard(userId, boardId, tagId || null);
+  if (tagId === undefined || tagId === null) {
+    const key = cache.boardKey(userId, boardId, 'concepts');
+    const cached = await cache.getJSON(key);
+    if (cached) return cached;
+    const rows = await conceptRepository.findAllByBoard(userId, boardId, null);
+    await cache.setJSON(key, rows);
+    return rows;
+  }
+  return conceptRepository.findAllByBoard(userId, boardId, tagId);
 }
 
 /**
@@ -88,6 +100,7 @@ async function create(userId, boardId, { prompt, answer, hint = null }) {
     hint: hint === null || hint === undefined ? null : hint.trim(),
   });
   if (!concept) throw new AppError(404, 'Board not found');
+  await cache.invalidateBoard(userId, boardId);
   return concept;
 }
 
@@ -126,6 +139,7 @@ async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
   }
   const concept = await conceptRepository.update(userId, boardId, conceptId, changes);
   if (!concept) throw new AppError(404, 'Concept not found');
+  await cache.invalidateBoard(userId, boardId);
   return concept;
 }
 
@@ -140,6 +154,7 @@ async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
 async function remove(userId, boardId, conceptId) {
   const deleted = await conceptRepository.remove(userId, boardId, conceptId);
   if (!deleted) throw new AppError(404, 'Concept not found');
+  await cache.invalidateBoard(userId, boardId);
   return { concept_id: conceptId };
 }
 
@@ -160,6 +175,7 @@ async function setLearned(userId, boardId, conceptId, learned) {
   }
   const concept = await conceptRepository.setLearned(userId, boardId, conceptId, learned);
   if (!concept) throw new AppError(404, 'Concept not found');
+  await cache.invalidateBoard(userId, boardId);
   return concept;
 }
 
@@ -223,7 +239,9 @@ async function importMany(userId, boardId, rows) {
     };
   });
 
-  return conceptRepository.importMany(userId, boardId, cleaned);
+  const created = await conceptRepository.importMany(userId, boardId, cleaned);
+  await cache.invalidateBoard(userId, boardId);
+  return created;
 }
 
 /**
@@ -235,6 +253,7 @@ async function importMany(userId, boardId, rows) {
  */
 async function removeAll(userId, boardId) {
   const deleted = await conceptRepository.removeAll(userId, boardId);
+  await cache.invalidateBoard(userId, boardId);
   return { deleted };
 }
 

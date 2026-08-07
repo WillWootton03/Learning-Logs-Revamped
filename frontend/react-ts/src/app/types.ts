@@ -1,5 +1,5 @@
 /**
- * Shared domain types for the LearnBoard app.
+ * Shared domain types for the Learning Logs app.
  *
  * These are the client-side models for the data served by the backend API.
  * Keeping them in one module (instead of inline in a context) lets any page or

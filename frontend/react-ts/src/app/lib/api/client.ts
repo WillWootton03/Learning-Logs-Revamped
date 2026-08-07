@@ -1,5 +1,5 @@
 /**
- * Base HTTP client for the LearnBoard backend.
+ * Base HTTP client for the Learning Logs backend.
  *
  * Every request goes to the Express server (VITE_API_URL) with
  * `credentials: 'include'` so the httpOnly JWT cookies set by /auth/* are sent

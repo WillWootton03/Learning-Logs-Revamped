@@ -52,7 +52,7 @@ export function Login() {
           </div>
           <div className="text-center">
             <h1 className="text-foreground">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to your LearnBoard account</p>
+            <p className="text-sm text-muted-foreground mt-1">Sign in to your Learning Logs account</p>
           </div>
         </div>
 

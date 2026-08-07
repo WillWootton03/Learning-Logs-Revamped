@@ -22,7 +22,7 @@ const transporter = smtpHost && smtpUser
     })
   : null;
 
-const MAIL_FROM = process.env.MAIL_FROM || `LearnBoard <${smtpUser || 'noreply@learnboard.app'}>`;
+const MAIL_FROM = process.env.MAIL_FROM || `Learning Logs <${smtpUser || 'noreply@learninglogs.app'}>`;
 
 /**
  * Email a verification code (a stateless JWT) to the user. The body carries

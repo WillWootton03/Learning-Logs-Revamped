@@ -1,5 +1,6 @@
 const tagRepository = require('../repositories/tagRepository');
 const conceptRepository = require('../repositories/conceptRepository');
+const cache = require('./cache');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
 
@@ -24,13 +25,19 @@ function validateId(id) {
 }
 
 /**
- * List all tags on a board the user owns.
+ * List all tags on a board the user owns. Served from the 30-minute Redis
+ * cache; a miss hits Postgres and repopulates.
  * @param {string} userId
  * @param {string} boardId
  * @returns {Promise<Array<object>>}
  */
 async function list(userId, boardId) {
-  return tagRepository.findAllByBoard(userId, boardId);
+  const key = cache.boardKey(userId, boardId, 'tags');
+  const cached = await cache.getJSON(key);
+  if (cached) return cached;
+  const rows = await tagRepository.findAllByBoard(userId, boardId);
+  await cache.setJSON(key, rows);
+  return rows;
 }
 
 /**
@@ -65,6 +72,7 @@ async function create(userId, boardId, { name }) {
   }
   const tag = await tagRepository.create(userId, boardId, { name: trimmed });
   if (!tag) throw new AppError(404, 'Board not found');
+  await cache.invalidateBoard(userId, boardId);
   return tag;
 }
 
@@ -91,7 +99,9 @@ async function createMany(userId, boardId, names) {
       throw new AppError(400, `Tag names must be non-empty strings (max ${MAX_NAME_LENGTH} characters)`);
     }
   }
-  return tagRepository.createMany(userId, boardId, unique);
+  const created = await tagRepository.createMany(userId, boardId, unique);
+  await cache.invalidateBoard(userId, boardId);
+  return created;
 }
 
 /**
@@ -122,6 +132,7 @@ async function linkMany(userId, boardId, conceptId, tagIds) {
     throw new AppError(400, 'One or more tags do not exist on this board');
   }
   await tagRepository.linkMany(userId, boardId, conceptId, unique);
+  await cache.invalidateBoard(userId, boardId);
   return { concept_id: conceptId, tag_ids: unique };
 }
 
@@ -145,6 +156,7 @@ async function update(userId, boardId, tagId, { name }) {
   }
   const tag = await tagRepository.update(userId, boardId, tagId, { name: trimmed });
   if (!tag) throw new AppError(404, 'Tag not found');
+  await cache.invalidateBoard(userId, boardId);
   return tag;
 }
 
@@ -159,6 +171,7 @@ async function update(userId, boardId, tagId, { name }) {
 async function remove(userId, boardId, tagId) {
   const deleted = await tagRepository.remove(userId, boardId, tagId);
   if (!deleted) throw new AppError(404, 'Tag not found');
+  await cache.invalidateBoard(userId, boardId);
   return { tag_id: tagId };
 }
 
@@ -182,6 +195,7 @@ async function linkConcept(userId, boardId, conceptId, tagId) {
   if (!tag) throw new AppError(404, 'Tag not found');
 
   const link = await tagRepository.linkConcept(userId, boardId, conceptId, tagId);
+  await cache.invalidateBoard(userId, boardId);
   // If the link already existed, linkConcept returns null (ON CONFLICT DO
   // NOTHING). Both entities were verified to exist, so treat as success.
   return link || { concept_id: conceptId, tag_id: tagId };
@@ -207,6 +221,7 @@ async function unlinkConcept(userId, boardId, conceptId, tagId) {
 
   const deleted = await tagRepository.unlinkConcept(userId, boardId, conceptId, tagId);
   if (!deleted) throw new AppError(404, 'Concept is not linked to that tag');
+  await cache.invalidateBoard(userId, boardId);
   return { concept_id: conceptId, tag_id: tagId };
 }
 
@@ -236,6 +251,7 @@ async function listConceptTags(userId, boardId, conceptId) {
  */
 async function removeAll(userId, boardId) {
   const deleted = await tagRepository.removeAll(userId, boardId);
+  await cache.invalidateBoard(userId, boardId);
   return { deleted };
 }
 

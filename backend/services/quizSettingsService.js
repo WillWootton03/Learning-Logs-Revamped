@@ -1,5 +1,6 @@
 const quizSettingsRepository = require('../repositories/quizSettingsRepository');
 const tagRepository = require('../repositories/tagRepository');
+const cache = require('./cache');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
 
@@ -55,15 +56,21 @@ async function resolveTagIds(userId, boardId, tagIds) {
 
 /**
  * List all quiz settings for a board, each with its linked tag ids.
+ * The fully-assembled list (tag ids resolved per setting) is cached for 30
+ * minutes; a miss hits Postgres and repopulates.
  * @param {string} userId
  * @param {string} boardId
  * @returns {Promise<Array<object>>}
  */
 async function list(userId, boardId) {
+  const key = cache.boardKey(userId, boardId, 'quizSettings');
+  const cached = await cache.getJSON(key);
+  if (cached) return cached;
   const settings = await quizSettingsRepository.findAllByBoard(userId, boardId);
   for (const setting of settings) {
     setting.tag_ids = await quizSettingsRepository.findTagIds(userId, boardId, setting.quiz_settings_id);
   }
+  await cache.setJSON(key, settings);
   return settings;
 }
 
@@ -123,6 +130,7 @@ async function create(
     await quizSettingsRepository.addTags(setting.quiz_settings_id, resolvedTagIds);
   }
   setting.tag_ids = resolvedTagIds;
+  await cache.invalidateBoard(userId, boardId);
   return setting;
 }
 
@@ -177,6 +185,7 @@ async function update(userId, boardId, quizSettingsId, { name, style, includeKno
     if (!setting) throw new AppError(404, 'Quiz settings not found');
   }
   setting.tag_ids = await quizSettingsRepository.findTagIds(userId, boardId, quizSettingsId);
+  await cache.invalidateBoard(userId, boardId);
   return setting;
 }
 
@@ -198,6 +207,7 @@ async function addTags(userId, boardId, quizSettingsId, tagIds) {
     await quizSettingsRepository.addTags(quizSettingsId, resolvedTagIds);
   }
   setting.tag_ids = await quizSettingsRepository.findTagIds(userId, boardId, quizSettingsId);
+  await cache.invalidateBoard(userId, boardId);
   return setting;
 }
 
@@ -225,6 +235,7 @@ async function removeTags(userId, boardId, quizSettingsId, tagIds) {
   }
   await quizSettingsRepository.removeTags(quizSettingsId, unique);
   setting.tag_ids = await quizSettingsRepository.findTagIds(userId, boardId, quizSettingsId);
+  await cache.invalidateBoard(userId, boardId);
   return setting;
 }
 
@@ -239,6 +250,7 @@ async function removeTags(userId, boardId, quizSettingsId, tagIds) {
 async function remove(userId, boardId, quizSettingsId) {
   const deleted = await quizSettingsRepository.remove(userId, boardId, quizSettingsId);
   if (!deleted) throw new AppError(404, 'Quiz settings not found');
+  await cache.invalidateBoard(userId, boardId);
   return { quiz_settings_id: quizSettingsId };
 }
 

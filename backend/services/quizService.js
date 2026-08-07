@@ -2,6 +2,7 @@ const quizRepository = require('../repositories/quizRepository');
 const quizSettingsRepository = require('../repositories/quizSettingsRepository');
 const conceptRepository = require('../repositories/conceptRepository');
 const tagRepository = require('../repositories/tagRepository');
+const cache = require('./cache');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
 const { normalize, isLenientMatch, isExactMatch } = require('./matching');
@@ -227,6 +228,9 @@ async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedM
     timeElapsedMs,
     results,
   });
+  // A run bumps mastery counters, so the cached concept list and run list for
+  // this board are both stale.
+  await cache.invalidateBoard(userId, boardId);
   return { run, results };
 }
 
@@ -289,13 +293,19 @@ async function recordRunFromSettings(userId, boardId, quizSettingsId, { timeElap
 }
 
 /**
- * List all quiz runs for a board (one-offs and settings-linked).
+ * List all quiz runs for a board (one-offs and settings-linked). Served from
+ * the 30-minute Redis cache; a miss hits Postgres and repopulates.
  * @param {string} userId
  * @param {string} boardId
  * @returns {Promise<Array<object>>}
  */
 async function listRuns(userId, boardId) {
-  return quizRepository.findRunsByBoard(userId, boardId);
+  const key = cache.boardKey(userId, boardId, 'runs');
+  const cached = await cache.getJSON(key);
+  if (cached) return cached;
+  const rows = await quizRepository.findRunsByBoard(userId, boardId);
+  await cache.setJSON(key, rows);
+  return rows;
 }
 
 /**
@@ -321,6 +331,7 @@ async function listRunsBySettings(userId, boardId, quizSettingsId) {
  */
 async function removeAll(userId, boardId) {
   const deleted = await quizRepository.removeAll(userId, boardId);
+  await cache.invalidateBoard(userId, boardId);
   return { deleted };
 }
 
