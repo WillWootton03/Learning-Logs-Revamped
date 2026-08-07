@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 
 /**
  * Look up a user by email. Used by password login, Google linking, and

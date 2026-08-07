@@ -1,6 +1,6 @@
 const quizSettingsRepository = require('../repositories/quizSettingsRepository');
 const tagRepository = require('../repositories/tagRepository');
-const cache = require('./cache');
+const { cache } = require('./cache');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
 

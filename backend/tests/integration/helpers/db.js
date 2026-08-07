@@ -1,4 +1,4 @@
-const pool = require('../../../db/pool');
+const { pool } = require('../../../db/pool');
 
 /**
  * Wipe all tables between tests. Truncating users cascades to every table

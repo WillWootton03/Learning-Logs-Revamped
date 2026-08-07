@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const authService = require('./authService');
 const userRepository = require('../repositories/userRepository');
 const passwordResetRepository = require('../repositories/passwordResetRepository');
-const mailer = require('./mailer');
+const { mailer } = require('./mailer');
 const AppError = require('./AppError');
 
 /**

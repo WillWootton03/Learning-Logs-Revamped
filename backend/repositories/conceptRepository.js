@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 const crypto = require('crypto');
 const AppError = require('../services/AppError');
 

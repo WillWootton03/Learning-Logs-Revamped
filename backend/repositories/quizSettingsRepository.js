@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 
 // Detail queries return the full row; list queries stay lean (no board_id,
 // no timestamps — those are redundant on a board-scoped list). All columns are

@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 const AppError = require('../services/AppError');
 
 // Summary columns for list; detail (get-by-id) additionally returns board_id,

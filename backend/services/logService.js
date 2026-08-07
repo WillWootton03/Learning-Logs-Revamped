@@ -1,5 +1,5 @@
 const logRepository = require('../repositories/logRepository');
-const cache = require('./cache');
+const { cache } = require('./cache');
 const AppError = require('./AppError');
 
 const MAX_TITLE_LENGTH = 120;

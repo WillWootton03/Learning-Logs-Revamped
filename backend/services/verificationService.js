@@ -1,7 +1,6 @@
-const jwt = require('jsonwebtoken');
-const { randomUUID } = require('crypto');
 const userRepository = require('../repositories/userRepository');
-const mailer = require('./mailer');
+const { mailer } = require('./mailer');
+const { jwtService } = require('./jwtService');
 const AppError = require('./AppError');
 
 /**
@@ -14,7 +13,7 @@ const AppError = require('./AppError');
  * deliberately not persisted; the DB only ever holds email_verified).
  */
 
-const TOKEN_TTL = '24h';
+const TOKEN_TTL = jwtService.constructor.EMAIL_TTL;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
 // userId -> last-sent timestamp, in-memory only.
@@ -27,10 +26,7 @@ const lastSentAt = new Map();
  * @returns {string} Signed JWT.
  */
 function generateToken(userId) {
-  return jwt.sign({ sub: userId }, process.env.JWT_EMAIL_SECRET, {
-    expiresIn: TOKEN_TTL,
-    jwtid: randomUUID(),
-  });
+  return jwtService.signEmailToken(userId);
 }
 
 /**
@@ -43,7 +39,7 @@ function verifyToken(token) {
   if (!token) throw new AppError(400, 'A verification code is required', 'TOKEN_REQUIRED');
   let payload;
   try {
-    payload = jwt.verify(token, process.env.JWT_EMAIL_SECRET);
+    payload = jwtService.verifyEmailToken(token);
   } catch (err) {
     throw new AppError(400, 'This code is invalid or has expired. Request a new one.', 'TOKEN_INVALID');
   }

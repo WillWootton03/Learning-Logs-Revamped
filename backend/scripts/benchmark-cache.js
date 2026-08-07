@@ -16,8 +16,8 @@
 require('dotenv').config();
 
 const { Redis } = require('@upstash/redis');
-const pool = require('../db/pool');
-const cache = require('../services/cache');
+const { pool } = require('../db/pool');
+const { cache } = require('../services/cache');
 
 const ITERATIONS = Number(process.argv[2]) || 10;
 const BOARD_ID = process.argv[3] || null;

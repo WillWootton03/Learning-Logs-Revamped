@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
-const { Pool } = require('pg');
+const { Database } = require('../../db/pool');
 const { getTestDatabaseUrl } = require('./helpers/testDb');
 
 /**
@@ -11,10 +11,7 @@ const { getTestDatabaseUrl } = require('./helpers/testDb');
  * Runs in a separate process from the tests, so .env is loaded here too.
  */
 module.exports = async function globalSetup() {
-  const pool = new Pool({
-    connectionString: getTestDatabaseUrl(),
-    ssl: { rejectUnauthorized: false },
-  });
+  const pool = new Database({ connectionString: getTestDatabaseUrl() });
   try {
     const schema = fs.readFileSync(path.join(__dirname, '../../db/schema.sql'), 'utf8');
     await pool.query(schema);

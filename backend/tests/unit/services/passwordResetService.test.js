@@ -18,12 +18,12 @@ const passwordResetService = require('../../../services/passwordResetService');
 const authService = require('../../../services/authService');
 const userRepository = require('../../../repositories/userRepository');
 const passwordResetRepository = require('../../../repositories/passwordResetRepository');
-const mailer = require('../../../services/mailer');
+const { mailer } = require('../../../services/mailer');
 
 jest.mock('../../../services/authService');
 jest.mock('../../../repositories/userRepository');
 jest.mock('../../../repositories/passwordResetRepository');
-jest.mock('../../../services/mailer', () => ({ sendPasswordResetEmail: jest.fn() }));
+jest.mock('../../../services/mailer', () => ({ mailer: { sendPasswordResetEmail: jest.fn() } }));
 
 const USER = { user_id: 'user-1', email: 'ada@example.com' };
 

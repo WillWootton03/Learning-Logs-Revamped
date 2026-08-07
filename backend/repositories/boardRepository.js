@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 
 /**
  * List every board owned by a user, with the aggregate counters the dashboard

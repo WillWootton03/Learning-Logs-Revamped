@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 
 /**
  * List all logs on a board, verifying board ownership via JOIN.

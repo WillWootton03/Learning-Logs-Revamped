@@ -14,12 +14,12 @@ process.env.JWT_EMAIL_SECRET = 'test-email-secret';
 const jwt = require('jsonwebtoken');
 const verificationService = require('../../../services/verificationService');
 const userRepository = require('../../../repositories/userRepository');
-const mailer = require('../../../services/mailer');
+const { mailer } = require('../../../services/mailer');
 const AppError = require('../../../services/AppError');
 
 jest.mock('jsonwebtoken');
 jest.mock('../../../repositories/userRepository');
-jest.mock('../../../services/mailer', () => ({ sendVerificationEmail: jest.fn() }));
+jest.mock('../../../services/mailer', () => ({ mailer: { sendVerificationEmail: jest.fn() } }));
 
 describe('verificationService.generateToken', () => {
   it('signs a token with the email secret, an expiry, and a unique jwtid', () => {

@@ -24,9 +24,11 @@ const { registerVerifiedUser } = require('./helpers/auth');
 const userRepository = require('../../repositories/userRepository');
 
 jest.mock('../../services/mailer', () => ({
-  sendVerificationEmail: jest.fn(),
+  mailer: {
+    sendVerificationEmail: jest.fn(),
+  },
 }));
-const mailer = require('../../services/mailer');
+const { mailer } = require('../../services/mailer');
 
 const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 

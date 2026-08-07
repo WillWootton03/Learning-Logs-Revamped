@@ -1,5 +1,5 @@
 const conceptRepository = require('../repositories/conceptRepository');
-const cache = require('./cache');
+const { cache } = require('./cache');
 const AppError = require('./AppError');
 const { isUuid } = require('../utils/validate');
 

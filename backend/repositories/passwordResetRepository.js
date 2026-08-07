@@ -1,4 +1,4 @@
-const pool = require('../db/pool');
+const { pool } = require('../db/pool');
 
 /**
  * Password reset tokens. One row per user — a new request overwrites the

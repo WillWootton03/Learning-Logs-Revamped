@@ -48,7 +48,7 @@ function loadCache() {
   process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
   jest.resetModules();
   // eslint-disable-next-line global-require
-  return require('../../../services/cache');
+  return require('../../../services/cache').cache;
 }
 
 function restoreEnv() {
@@ -114,7 +114,7 @@ describe('cache', () => {
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     jest.resetModules();
     // eslint-disable-next-line global-require
-    const cache = require('../../../services/cache');
+    const { cache } = require('../../../services/cache');
     const before = instances.length;
 
     expect(await cache.getJSON('anything')).toBeNull();

@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
-const pool = require('./pool');
+const { pool } = require('./pool');
 
 /**
  * Apply db/schema.sql to the database. Run with: npm run db:setup.

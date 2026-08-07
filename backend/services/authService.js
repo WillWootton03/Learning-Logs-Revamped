@@ -1,12 +1,12 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { randomUUID } = require('crypto');
-const { OAuth2Client } = require('google-auth-library');
 const userRepository = require('../repositories/userRepository');
 const AppError = require('./AppError');
+const { passwordHasher } = require('./passwordHasher');
+const { jwtService } = require('./jwtService');
+const { googleAuthClient } = require('./googleAuthClient');
 
-const ACCESS_TTL = '1h';
-const REFRESH_TTL = '30d';
+const ACCESS_TTL = jwtService.constructor.ACCESS_TTL;
+const REFRESH_TTL = jwtService.constructor.REFRESH_TTL;
 
 /** Special character = anything that is not a letter or digit. */
 const SPECIAL_CHAR_RE = /[^A-Za-z0-9]/;
@@ -33,19 +33,13 @@ function validatePasswordStrength(password) {
   }
 }
 
-const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
-
 /**
- * Hash a plaintext password with bcrypt.
+ * Hash a plaintext password with bcrypt (via PasswordHasher).
  * @param {string} plaintext - Raw password from the client.
  * @returns {Promise<string>} The bcrypt hash to store in the DB.
  */
 function hashPassword(plaintext) {
-  return bcrypt.hash(plaintext, 10);
+  return passwordHasher.hash(plaintext);
 }
 
 /**
@@ -55,7 +49,7 @@ function hashPassword(plaintext) {
  * @returns {Promise<boolean>} True when the password matches.
  */
 function verifyPassword(plaintext, hash) {
-  return bcrypt.compare(plaintext, hash);
+  return passwordHasher.compare(plaintext, hash);
 }
 
 /**
@@ -70,10 +64,7 @@ function verifyPassword(plaintext, hash) {
  * @returns {string} Signed access token.
  */
 function signAccessToken(userId, passwordIt) {
-  return jwt.sign({ userId, passwordIt }, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: ACCESS_TTL,
-    jwtid: randomUUID(),
-  });
+  return jwtService.signAccessToken(userId, passwordIt);
 }
 
 /**
@@ -89,10 +80,7 @@ function signAccessToken(userId, passwordIt) {
  */
 function signTokens(userId, passwordIt) {
   const accessToken = signAccessToken(userId, passwordIt);
-  const refreshToken = jwt.sign({ userId, passwordIt }, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: REFRESH_TTL,
-    jwtid: randomUUID(),
-  });
+  const refreshToken = jwtService.signRefreshToken(userId, passwordIt);
   return { accessToken, refreshToken };
 }
 
@@ -102,7 +90,7 @@ function signTokens(userId, passwordIt) {
  * @returns {object} Decoded payload (contains userId).
  */
 function verifyAccessToken(token) {
-  return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  return jwtService.verifyAccessToken(token);
 }
 
 /**
@@ -111,7 +99,7 @@ function verifyAccessToken(token) {
  * @returns {object} Decoded payload (contains userId).
  */
 function verifyRefreshToken(token) {
-  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+  return jwtService.verifyRefreshToken(token);
 }
 
 /**
@@ -141,10 +129,7 @@ async function loginWithPassword(email, password) {
  * @returns {string} Full Google OAuth authorize URL.
  */
 function getGoogleAuthUrl() {
-  return googleClient.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['openid', 'email', 'profile'],
-  });
+  return googleAuthClient.getAuthUrl();
 }
 
 /**
@@ -153,7 +138,7 @@ function getGoogleAuthUrl() {
  * @returns {Promise<string>} Google id_token used to identify the user.
  */
 async function exchangeGoogleCode(code) {
-  const { tokens } = await googleClient.getToken(code);
+  const { tokens } = await googleAuthClient.getToken(code);
   if (!tokens.id_token) {
     throw new AppError(400, 'Google did not return an ID token');
   }
@@ -168,7 +153,7 @@ async function exchangeGoogleCode(code) {
  * @returns {Promise<object>} The local user's row (full record).
  */
 async function loginWithGoogle(idToken) {
-  const ticket = await googleClient.verifyIdToken({
+  const ticket = await googleAuthClient.verifyIdToken({
     idToken,
     audience: process.env.GOOGLE_CLIENT_ID,
   });
@@ -213,4 +198,3 @@ module.exports = {
   loginWithPassword,
   loginWithGoogle,
 };
-

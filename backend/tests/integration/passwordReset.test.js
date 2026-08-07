@@ -18,15 +18,17 @@
  */
 const request = require('supertest');
 const app = require('../../app');
-const pool = require('../../db/pool');
+const { pool } = require('../../db/pool');
 const { truncateAll } = require('./helpers/db');
 const { registerVerifiedUser } = require('./helpers/auth');
 
 jest.mock('../../services/mailer', () => ({
-  sendVerificationEmail: jest.fn(),
-  sendPasswordResetEmail: jest.fn(),
+  mailer: {
+    sendVerificationEmail: jest.fn(),
+    sendPasswordResetEmail: jest.fn(),
+  },
 }));
-const mailer = require('../../services/mailer');
+const { mailer } = require('../../services/mailer');
 
 const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
