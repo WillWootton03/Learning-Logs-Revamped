@@ -1,3 +1,7 @@
 # Never commit the nginx origin certificate (private key) or any local env
 # files with secrets. Both services have their own .gitignore for the rest.
 nginx/certs/
+
+# Datadog Agent API key — created by hand on the server (see the datadog
+# service in docker-compose.release.yaml / docker-compose.prod.yaml).
+datadog.env

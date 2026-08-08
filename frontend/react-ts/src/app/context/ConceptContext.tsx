@@ -89,8 +89,14 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
     }
   }, [concepts, updateBoardStats]);
 
-  /** Resolve with a board's mastery threshold, waiting for the boards fetch
-   *  if it hasn't landed yet (e.g. a page mounts before boards load). */
+  /**
+   * Resolve with a board's mastery threshold. If the boards fetch hasn't
+   * landed yet, this waits for it — but only for a bounded time: a board whose
+   * threshold never arrives (e.g. it has no concepts and the boards list is
+   * empty) must not hold up the page's concept load forever, or the page
+   * spinner never clears. Falls back to 0 (nothing is "learned") after the
+   * wait, which is correct for a board with no concepts.
+   */
   const waitForThreshold = useCallback((boardId: string): Promise<number> => {
     const threshold = thresholdsRef.current[boardId];
     if (threshold !== undefined) return Promise.resolve(threshold);
@@ -98,6 +104,17 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
       const resolvers = thresholdWaitersRef.current.get(boardId) ?? [];
       resolvers.push(resolve);
       thresholdWaitersRef.current.set(boardId, resolvers);
+      // Safety net: if the boards list never loads (or this board is missing
+      // from it), don't block the concept load — fall back to no mastery.
+      setTimeout(() => {
+        const remaining = thresholdWaitersRef.current.get(boardId) ?? [];
+        const idx = remaining.indexOf(resolve);
+        if (idx !== -1) {
+          remaining.splice(idx, 1);
+          if (remaining.length === 0) thresholdWaitersRef.current.delete(boardId);
+          resolve(0);
+        }
+      }, 2000);
     });
   }, []);
 

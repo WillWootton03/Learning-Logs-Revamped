@@ -205,7 +205,7 @@ export function AllConcepts() {
       <div className="flex gap-6">
         {/* tag sidebar */}
         {allTags.length > 0 && (
-          <aside className="hidden lg:flex flex-col gap-1.5 w-44 flex-shrink-0">
+          <aside className="hidden lg:flex flex-col gap-1.5 w-44 shrink-0">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono mb-1">Filter by tag</p>
             {allTags.map((tag) => (
               <button
@@ -268,9 +268,9 @@ export function AllConcepts() {
                   className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer"
                 >
                   {concept.learned ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   ) : (
-                    <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <Circle className="w-4 h-4 text-muted-foreground shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>{concept.title}</p>
@@ -296,7 +296,7 @@ export function AllConcepts() {
                     )}
                   </div>
                   {concept.lastReviewed && (
-                    <span className="text-[11px] text-muted-foreground font-mono flex-shrink-0 hidden sm:block">{concept.lastReviewed}</span>
+                    <span className="text-[11px] text-muted-foreground font-mono shrink-0 hidden sm:block">{concept.lastReviewed}</span>
                   )}
                 </motion.div>
               ))}
@@ -311,7 +311,12 @@ export function AllConcepts() {
       </div>
 
       <AddConceptModal boardId={id!} open={addConceptOpen} onClose={() => setAddConceptOpen(false)} />
-      <CSVUploadModal boardId={id!} open={csvOpen} onClose={() => setCsvOpen(false)} />
+      <CSVUploadModal
+        boardId={id!}
+        open={csvOpen}
+        onClose={() => setCsvOpen(false)}
+        onImported={() => loadConcepts(id!)}
+      />
       <ConfirmModal
         open={deleteOpen}
         title="Delete all concepts"

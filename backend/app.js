@@ -1,5 +1,10 @@
 require('dotenv').config();
 
+// Datadog APM: must be initialized before any module that opens connections
+// (express, pg, ...) is required, so the tracer can wrap them. Reads
+// DD_TRACE_AGENT_URL / DD_ENV / DD_SERVICE from the environment.
+const tracer = require('dd-trace').init({ logInjection: true });
+
 var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
@@ -26,7 +31,29 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(logger('dev'));
+// Structured JSON request logs for Datadog. One line per request with the
+// method, URL, status, and duration, plus the active trace/span ids so every
+// log line correlates with its APM trace in the Logs Explorer.
+app.use(
+  logger(function (tokens, req, res) {
+    const span = tracer.scope().active();
+    const status = parseInt(tokens.status(req, res) ?? '0', 10) || 0;
+    const responseTimeMs = parseFloat(tokens['response-time'](req, res) ?? '0') || 0;
+    const log = {
+      timestamp: tokens.date(req, res, 'iso'),
+      message: `${tokens.method(req, res)} ${tokens.url(req, res)} ${status} ${responseTimeMs}ms`,
+      method: tokens.method(req, res),
+      url: tokens.url(req, res),
+      status,
+      response_time_ms: responseTimeMs,
+    };
+    if (span) {
+      log['dd.trace_id'] = span.context().toTraceId();
+      log['dd.span_id'] = span.context().toSpanId();
+    }
+    return JSON.stringify(log);
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());

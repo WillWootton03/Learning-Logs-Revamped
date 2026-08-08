@@ -258,7 +258,12 @@ export function BoardDetail() {
         onClose={() => setSessionOpen(false)}
         onStart={(presetId) => navigate(`/app/board/${id}/sessions/play?presetId=${presetId}`)}
       />
-      <CSVUploadModal boardId={id!} open={csvOpen} onClose={() => setCsvOpen(false)} />
+      <CSVUploadModal
+        boardId={id!}
+        open={csvOpen}
+        onClose={() => setCsvOpen(false)}
+        onImported={() => loadConcepts(id!)}
+      />
     </>
   );
 }
