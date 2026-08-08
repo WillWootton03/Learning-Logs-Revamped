@@ -1,4 +1,5 @@
 const userRepository = require('../repositories/userRepository');
+const { pool } = require('../db/pool');
 const { mailer } = require('./mailer');
 const { jwtService } = require('./jwtService');
 const AppError = require('./AppError');
@@ -59,7 +60,9 @@ function verifyToken(token) {
  * @throws {AppError} 400 already verified, 404 user missing, 429 too soon to resend.
  */
 async function issueToken(userId, { force = false } = {}) {
-  const user = await userRepository.findById(userId);
+  // The user id is already known (from registration or the emailed link), so
+  // publish it as the RLS context for the lookup.
+  const user = await pool.runWithContext({ userId }, () => userRepository.findById(userId));
   if (!user) throw new AppError(404, 'User not found');
   if (user.email_verified) {
     throw new AppError(400, 'Email is already verified', 'EMAIL_ALREADY_VERIFIED');

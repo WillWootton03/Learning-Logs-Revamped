@@ -50,7 +50,7 @@ graph TD
 
 | Entity | Notes |
 |---|---|
-| **User** | Owns boards. Auth via password (bcrypt) or Google OAuth. |
+| **User** | Owns boards. Auth via password (bcrypt) with email verification. |
 | **Board** | Aggregate root. Has a `mastery_threshold` — how many correct answers a concept needs to be labeled "known". |
 | **Concept** | Exactly one board. Fields: prompt (question), answer, hint (optional), `times_answered_correctly`. |
 | **Tag** | Belongs to a board. Many-to-many with concepts (a tag tags 0..n concepts). |
@@ -76,13 +76,12 @@ flowchart LR
   C --> S["services"]
   S --> P["repositories"]
   P --> DB[("PostgreSQL")]
-  API --> OAUTH["Google OAuth2"]
 ```
 
 - **Frontend**: React + Vite SPA (separate package in `frontend/`).
 - **Backend**: existing Express 4 layered architecture in `backend/` (routes → controllers → services → repositories) — extended with the domain resources.
 - **DB**: PostgreSQL via `pg.Pool` (`backend/db/pool.js`).
-- **Auth**: JWT access (1h) + refresh (30d) in httpOnly cookies; bcrypt for passwords; Google OAuth2 login. Already implemented.
+- **Auth**: JWT access (1h) + refresh (30d) in httpOnly cookies; bcrypt for passwords with email verification. Already implemented.
 
 ### Authorization Boundary
 The `authenticate` middleware (already built) resolves the user. A new `requireBoardAccess` middleware loads the board and verifies `board.user_id === req.userId` before any child-resource route. This keeps access control at the aggregate root.
@@ -102,7 +101,6 @@ Ownership is enforced as **defense in depth** at two layers:
 | Database | PostgreSQL + `pg` Pool | Done |
 | Password hashing | bcryptjs | Done |
 | Tokens | jsonwebtoken (access 1h / refresh 30d, httpOnly cookies) | Done |
-| OAuth | Google via `google-auth-library` | Done |
 | Frontend | React + Vite SPA | Not started |
 | HTTP client | `fetch` with `credentials: 'include'` (cookies) | Not started |
 
@@ -118,7 +116,8 @@ CREATE TABLE users (
   user_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT,
-  google_id     TEXT UNIQUE,
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  password_it   INT NOT NULL DEFAULT 1,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -214,7 +213,6 @@ All routes require the access-token cookie except the auth routes.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/refresh` | Auth (done) |
-| GET | `/auth/google`, `/auth/google/callback` | Google OAuth (done) |
 | GET/PUT/DELETE | `/users/me` | Current user (done) |
 | GET | `/boards` | List my boards |
 | POST | `/boards` | Create board |
@@ -276,8 +274,8 @@ Already implemented and unchanged:
 - bcrypt password hashing (cost 10).
 - JWT access token (1h) + refresh token (30d), separate secrets.
 - Both tokens live only in httpOnly, `sameSite: lax` cookies (`secure` in production). Never in bodies or localStorage.
-- Logout clears both cookies; refresh rotates a new access pair.
-- Google OAuth2 login upserts users; Google-only accounts have `password_hash = NULL`.
+- Logout clears both cookies; refresh mints a fresh access token.
+- Email verification is required at signup (stateless JWT codes); all accounts sign in with email + password.
 - HTTP responses never expose `password_hash` — only `user_id` (+ safe fields).
 
 New: `requireBoardAccess` middleware enforces board ownership for all board-scoped routes.

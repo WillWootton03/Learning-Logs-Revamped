@@ -3,6 +3,7 @@ const userService = require('../services/userService');
 const verificationService = require('../services/verificationService');
 const passwordResetService = require('../services/passwordResetService');
 const userRepository = require('../repositories/userRepository');
+const { pool } = require('../db/pool');
 const asyncHandler = require('../middleware/asyncHandler');
 const {
   REFRESH_COOKIE,
@@ -10,8 +11,6 @@ const {
   setAccessCookie,
   clearAuthCookies,
 } = require('../utils/cookies');
-
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 /**
  * POST /auth/register — create a new account and send a verification code.
@@ -25,7 +24,7 @@ async function register(req, res) {
   }
   authService.validatePasswordStrength(password);
   const passwordHash = await authService.hashPassword(password);
-  const user = await userService.create({ email, passwordHash, googleId: null });
+  const user = await userService.create({ email, passwordHash });
   // force=true skips the cooldown check so the very first code always goes out.
   await verificationService.issueToken(user.user_id, { force: true });
   return res.status(201).json({
@@ -77,8 +76,10 @@ async function verify(req, res) {
     return res.status(400).json({ error: 'A verification code is required' });
   }
   const userId = verificationService.verifyToken(token);
-  await userRepository.setEmailVerified(userId);
-  const user = await userRepository.findById(userId);
+  // The code resolves straight to a user id, so publish it as the RLS context
+  // for the verify + re-read (no session exists yet — the link came by email).
+  await pool.runWithContext({ userId }, () => userRepository.setEmailVerified(userId));
+  const user = await pool.runWithContext({ userId }, () => userRepository.findById(userId));
   const tokens = authService.signTokens(userId, user.password_it);
   setAuthCookies(res, tokens);
   return res.status(200).json({ user_id: userId });
@@ -94,7 +95,9 @@ async function resendVerification(req, res) {
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
-  const user = await userRepository.findByEmail(email.trim().toLowerCase());
+  const user = await pool.runWithContext({ email: email.trim().toLowerCase() }, () =>
+    userRepository.findByEmail(email.trim().toLowerCase())
+  );
   if (!user) {
     return res.status(404).json({ error: 'No account found with that email' });
   }
@@ -164,8 +167,11 @@ async function refresh(req, res) {
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
   // Password versioning: a refresh token minted before a password change is
-  // stale. Revoke the cookies so the client returns to the login page.
-  const user = await userRepository.findById(payload.userId);
+  // stale. Revoke the cookies so the client returns to the login page. The
+  // token already identifies the user, so publish that id as the RLS context.
+  const user = await pool.runWithContext({ userId: payload.userId }, () =>
+    userRepository.findById(payload.userId)
+  );
   if (!user || user.password_it !== payload.passwordIt) {
     clearAuthCookies(res);
     return res.status(401).json({
@@ -178,43 +184,6 @@ async function refresh(req, res) {
   return res.status(200).json({ user_id: payload.userId });
 }
 
-/**
- * GET /auth/google — start OAuth by redirecting the browser to Google's
- * consent screen.
- */
-async function googleStart(req, res) {
-  const url = authService.getGoogleAuthUrl();
-  return res.redirect(url);
-}
-
-/**
- * GET /auth/google/callback — Google redirects here after consent.
- * Exchanges the code for an id_token, resolves/logs in the user, sets the
- * same JWT cookies as password login, then sends the browser to the frontend.
- * Unverified accounts (per the OTP policy, Google accounts included) are sent
- * to the verify page instead of being signed in.
- */
-async function googleCallback(req, res) {
-  const { code } = req.query;
-  if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
-  }
-  const idToken = await authService.exchangeGoogleCode(code);
-  const user = await authService.loginWithGoogle(idToken);
-  if (!user.email_verified) {
-    try {
-      await verificationService.issueToken(user.user_id);
-    } catch (err) {
-      if (err.status !== 429) throw err;
-    }
-    const verifyUrl = `${FRONTEND_URL}/verify?email=${encodeURIComponent(user.email)}`;
-    return res.redirect(verifyUrl);
-  }
-  const tokens = authService.signTokens(user.user_id, user.password_it);
-  setAuthCookies(res, tokens);
-  return res.redirect(FRONTEND_URL);
-}
-
 module.exports = {
   register: asyncHandler(register),
   login: asyncHandler(login),
@@ -224,6 +193,4 @@ module.exports = {
   resetPassword: asyncHandler(resetPassword),
   logout: asyncHandler(logout),
   refresh: asyncHandler(refresh),
-  googleStart: asyncHandler(googleStart),
-  googleCallback: asyncHandler(googleCallback),
 };

@@ -37,7 +37,7 @@ function refreshCookieOptions() {
 }
 
 /**
- * Write both JWT cookies onto the response (first login: register/login/google).
+ * Write both JWT cookies onto the response (first login: register/login).
  * @param {object} res - Express response.
  * @param {{accessToken: string, refreshToken: string}} tokens
  */

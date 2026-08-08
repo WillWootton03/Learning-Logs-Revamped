@@ -12,4 +12,16 @@ function getTestDatabaseUrl() {
   );
 }
 
-module.exports = { getTestDatabaseUrl };
+/**
+ * Resolve the admin/owner URL for the test database, used for schema changes
+ * and truncation that the restricted app role is not allowed to perform.
+ * @returns {string} PostgreSQL connection string.
+ */
+function getTestDatabaseAdminUrl() {
+  return (
+    process.env.TEST_DATABASE_ADMIN_URL ||
+    getTestDatabaseUrl()
+  );
+}
+
+module.exports = { getTestDatabaseUrl, getTestDatabaseAdminUrl };

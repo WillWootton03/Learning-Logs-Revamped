@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS users (
   email          TEXT NOT NULL UNIQUE,
   full_name      TEXT,
   password_hash  TEXT,
-  google_id      TEXT UNIQUE,
   email_verified BOOLEAN NOT NULL DEFAULT false,
   -- Bumped every time the password changes. Tokens embed the value they were
   -- minted against, so a password reset/change revokes every older session.
@@ -113,8 +112,8 @@ CREATE TABLE IF NOT EXISTS quiz_questions (
 );
 
 -- Indexes for the FK columns used in every board-scoped query.
--- (users.email / users.google_id and tags(board_id, name) are already
---  indexed by their UNIQUE constraints, so no extra indexes are needed.)
+-- (users.email and tags(board_id, name) are already indexed by their UNIQUE
+--  constraints, so no extra indexes are needed.)
 CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards (user_id);
 CREATE INDEX IF NOT EXISTS idx_logs_board_id ON logs (board_id);
 CREATE INDEX IF NOT EXISTS idx_concepts_board_id ON concepts (board_id);
@@ -143,5 +142,160 @@ ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS match_all_tags BOOLEAN NOT NU
 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_it INT NOT NULL DEFAULT 1;
+-- Google OAuth was removed; drop the column on databases created before this.
+-- The users_self policy still references it, so drop the policy first (it is
+-- recreated without google_id in the RLS section below).
+DROP POLICY IF EXISTS users_self ON users;
+ALTER TABLE users DROP COLUMN IF EXISTS google_id;
+
+
+-- ============================================================================
+-- Row-level security
+-- ----------------------------------------------------------------------------
+-- Every query the backend runs is filtered at the database layer by the owner
+-- of the current request. The app publishes the authenticated user id with
+-- set_config('app.current_user_id', ...) right after verifying the access
+-- token (see db/pool.js + middleware/authenticate.js), so the DB refuses to
+-- return or mutate rows the current user does not own — even if application
+-- code forgets to filter. FORCE ROW LEVEL SECURITY is required because the
+-- app connects as the table owner, who would otherwise bypass RLS entirely.
+--
+-- Ownership is indirect for most tables: concepts/logs/tags/quiz_settings/quiz
+-- belong to a board, and the board belongs to the user. Policies on those
+-- tables walk up to boards and compare the board's user_id.
+--
+-- Auth flows (register / login / verify / forgot / reset password) run BEFORE
+-- any user is known, so `users` and `password_resets` carry narrow extra
+-- policies keyed on the address or reset token that the backend sets for those
+-- specific lookups only (never from user input).
+-- ============================================================================
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users FORCE ROW LEVEL SECURITY;
+ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE password_resets FORCE ROW LEVEL SECURITY;
+ALTER TABLE boards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE boards FORCE ROW LEVEL SECURITY;
+ALTER TABLE logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE logs FORCE ROW LEVEL SECURITY;
+ALTER TABLE concepts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE concepts FORCE ROW LEVEL SECURITY;
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tags FORCE ROW LEVEL SECURITY;
+ALTER TABLE concept_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE concept_tags FORCE ROW LEVEL SECURITY;
+ALTER TABLE quiz_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz_settings FORCE ROW LEVEL SECURITY;
+ALTER TABLE quiz_settings_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz_settings_tags FORCE ROW LEVEL SECURITY;
+ALTER TABLE quiz ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz FORCE ROW LEVEL SECURITY;
+ALTER TABLE quiz_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quiz_questions FORCE ROW LEVEL SECURITY;
+
+-- The current user id. NULLIF + ::uuid keeps the cast safe when the setting
+-- is unset (current_setting returns NULL), which fails closed to "no rows".
+DROP POLICY IF EXISTS users_self ON users;
+CREATE POLICY users_self ON users
+  USING (
+    user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+    OR email = NULLIF(current_setting('app.current_email', true), '')
+  )
+  WITH CHECK (
+    user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+  );
+
+-- Registration inserts a brand-new row before any session exists.
+DROP POLICY IF EXISTS users_register ON users;
+CREATE POLICY users_register ON users FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS password_resets_self ON password_resets;
+CREATE POLICY password_resets_self ON password_resets
+  USING (
+    user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
+    OR token = NULLIF(current_setting('app.current_reset_token', true), '')
+  )
+  WITH CHECK (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid);
+
+DROP POLICY IF EXISTS boards_owner ON boards;
+CREATE POLICY boards_owner ON boards
+  USING (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid)
+  WITH CHECK (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid);
+
+-- Board-scoped tables: the row's board must belong to the current user.
+DROP POLICY IF EXISTS logs_owner ON logs;
+CREATE POLICY logs_owner ON logs
+  USING (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+DROP POLICY IF EXISTS concepts_owner ON concepts;
+CREATE POLICY concepts_owner ON concepts
+  USING (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+DROP POLICY IF EXISTS tags_owner ON tags;
+CREATE POLICY tags_owner ON tags
+  USING (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+DROP POLICY IF EXISTS quiz_settings_owner ON quiz_settings;
+CREATE POLICY quiz_settings_owner ON quiz_settings
+  USING (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+DROP POLICY IF EXISTS quiz_owner ON quiz;
+CREATE POLICY quiz_owner ON quiz
+  USING (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (board_id IN (
+    SELECT board_id FROM boards
+    WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+-- Join tables: walk through their parent (concept/tag, quiz_settings/tag,
+-- quiz/question) up to the board, then to the current user.
+DROP POLICY IF EXISTS concept_tags_owner ON concept_tags;
+CREATE POLICY concept_tags_owner ON concept_tags
+  USING (concept_id IN (
+    SELECT c.concept_id FROM concepts c JOIN boards b ON b.board_id = c.board_id
+    WHERE b.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (concept_id IN (
+    SELECT c.concept_id FROM concepts c JOIN boards b ON b.board_id = c.board_id
+    WHERE b.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+DROP POLICY IF EXISTS quiz_settings_tags_owner ON quiz_settings_tags;
+CREATE POLICY quiz_settings_tags_owner ON quiz_settings_tags
+  USING (quiz_settings_id IN (
+    SELECT qs.quiz_settings_id FROM quiz_settings qs JOIN boards b ON b.board_id = qs.board_id
+    WHERE b.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (quiz_settings_id IN (
+    SELECT qs.quiz_settings_id FROM quiz_settings qs JOIN boards b ON b.board_id = qs.board_id
+    WHERE b.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
+DROP POLICY IF EXISTS quiz_questions_owner ON quiz_questions;
+CREATE POLICY quiz_questions_owner ON quiz_questions
+  USING (quiz_id IN (
+    SELECT q.quiz_id FROM quiz q JOIN boards b ON b.board_id = q.board_id
+    WHERE b.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid))
+  WITH CHECK (quiz_id IN (
+    SELECT q.quiz_id FROM quiz q JOIN boards b ON b.board_id = q.board_id
+    WHERE b.user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid));
+
 
 

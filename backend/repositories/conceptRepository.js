@@ -209,10 +209,7 @@ async function setLearned(userId, boardId, conceptId, learned) {
  *   answer, hint, tags) or null if the board isn't the user's.
  */
 async function importMany(userId, boardId, rows) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  return pool.transaction(async (client) => {
     // 1. Tags first: collect every unique tag name across all rows, batch
     //    insert any that don't exist yet (ON CONFLICT skips existing), then
     //    read back the ids for all names so links can reference them.
@@ -285,14 +282,8 @@ async function importMany(userId, boardId, rows) {
       );
     }
 
-    await client.query('COMMIT');
     return concepts.map((concept, i) => ({ ...concept, tags: rows[i].tags }));
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**

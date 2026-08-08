@@ -7,10 +7,13 @@
  *   3. Redis GET  (the cache-hit read path)
  *   4. Full miss path (Postgres query + Redis SET — what a TTL expiry costs)
  *
- * Run from backend/ with the .env credentials in place:
- *   node scripts/benchmark-cache.js [iterations] [boardId]
+ * Row-level security is active, so the benchmark runs as a real user (their
+ * boards/concepts are the only rows RLS will show). Run from backend/ with the
+ * .env credentials in place:
+ *   node scripts/benchmark-cache.js [iterations] [boardId] [userId]
  *
- * A board is auto-picked if none is given (the first board that has concepts).
+ * A board is auto-picked if none is given (the first of that user's boards
+ * that has concepts).
  */
 
 require('dotenv').config();
@@ -21,6 +24,7 @@ const { cache } = require('../services/cache');
 
 const ITERATIONS = Number(process.argv[2]) || 10;
 const BOARD_ID = process.argv[3] || null;
+const USER_ID = process.argv[4] || null;
 
 const LIST_QUERY = `SELECT c.concept_id, c.prompt, c.answer, c.times_answered_correctly,
         COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.tag_id IS NOT NULL), '{}') AS tags
@@ -58,79 +62,90 @@ async function timeIt(label, fn) {
     console.error('Cache is disabled — set UPSTASH_REDIS_REST_URL/TOKEN in .env (and not NODE_ENV=test).');
     process.exit(1);
   }
-
-  const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
-
-  // Pick a board (and its owner) that has concepts.
-  let board;
-  if (BOARD_ID) {
-    const res = await pool.query(
-      `SELECT b.board_id, b.user_id FROM boards b WHERE b.board_id = $1 LIMIT 1`,
-      [BOARD_ID]
-    );
-    board = res.rows[0];
-  } else {
-    const res = await pool.query(
-      `SELECT b.board_id, b.user_id
-       FROM boards b
-       WHERE EXISTS (SELECT 1 FROM concepts c WHERE c.board_id = b.board_id)
-       ORDER BY b.created_at
-       LIMIT 1`
-    );
-    board = res.rows[0];
-  }
-  if (!board) {
-    console.error('No board with concepts found in the database.');
+  if (!USER_ID) {
+    console.error('RLS is active — run as a user by passing their user_id as the third argument:');
+    console.error('  node scripts/benchmark-cache.js [iterations] [boardId] [userId]');
     process.exit(1);
   }
 
-  const key = cache.boardKey(board.user_id, board.board_id, 'concepts');
-  console.log(`Benchmarking board ${board.board_id} (${ITERATIONS} iterations each)\n`);
+  // Run the whole benchmark as this user so RLS shows their boards/concepts.
+  await pool.runAsUser(USER_ID, async () => {
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
 
-  // Warm Postgres + the pool's connection before timing.
-  await pool.query(LIST_QUERY, [board.board_id]);
+    // Pick a board (and its owner) that has concepts.
+    let board;
+    if (BOARD_ID) {
+      const res = await pool.query(
+        `SELECT b.board_id, b.user_id FROM boards b WHERE b.board_id = $1 LIMIT 1`,
+        [BOARD_ID]
+      );
+      board = res.rows[0];
+    } else {
+      const res = await pool.query(
+        `SELECT b.board_id, b.user_id
+         FROM boards b
+         WHERE EXISTS (SELECT 1 FROM concepts c WHERE c.board_id = b.board_id)
+         ORDER BY b.created_at
+         LIMIT 1`
+      );
+      board = res.rows[0];
+    }
+    if (!board) {
+      console.error('No board with concepts found in the database.');
+      process.exit(1);
+    }
 
-  const pg = await timeIt('Postgres list query (no cache)', async () => {
+    const key = cache.boardKey(board.user_id, board.board_id, 'concepts');
+    console.log(`Benchmarking board ${board.board_id} (${ITERATIONS} iterations each)\n`);
+
+    // Warm Postgres + the pool's connection before timing.
     await pool.query(LIST_QUERY, [board.board_id]);
-  });
 
-  // Cache-miss path: what the app does when the TTL has lapsed.
-  const miss = await timeIt('Full miss (PG query + Redis SET)', async () => {
-    const { rows } = await pool.query(LIST_QUERY, [board.board_id]);
-    await redis.set(key, JSON.stringify(rows), { ex: cache.CACHE_TTL_SECONDS });
-  });
+    const pg = await timeIt('Postgres list query (no cache)', async () => {
+      await pool.query(LIST_QUERY, [board.board_id]);
+    });
 
-  // Ensure a value is present, then time pure cache reads.
-  await redis.set(key, JSON.stringify(['x']), { ex: cache.CACHE_TTL_SECONDS });
-  const hit = await timeIt('Redis GET (cache hit)', async () => {
-    await redis.get(key);
-  });
+    // Cache-miss path: what the app does when the TTL has lapsed.
+    const miss = await timeIt('Full miss (PG query + Redis SET)', async () => {
+      const { rows } = await pool.query(LIST_QUERY, [board.board_id]);
+      await redis.set(key, JSON.stringify(rows), { ex: cache.CACHE_TTL_SECONDS });
+    });
 
-  const write = await timeIt('Redis SET (cache write)', async () => {
+    // Ensure a value is present, then time pure cache reads.
     await redis.set(key, JSON.stringify(['x']), { ex: cache.CACHE_TTL_SECONDS });
+    const hit = await timeIt('Redis GET (cache hit)', async () => {
+      await redis.get(key);
+    });
+
+    const write = await timeIt('Redis SET (cache write)', async () => {
+      await redis.set(key, JSON.stringify(['x']), { ex: cache.CACHE_TTL_SECONDS });
+    });
+
+    await redis.del(key).catch(() => {});
+    await pool.end();
+
+    console.log('\n--- verdict ---');
+    if (hit.avg < pg.avg) {
+      const saving = ((pg.avg - hit.avg) / pg.avg) * 100;
+      console.log(
+        `Redis cache HIT is ${(pg.avg - hit.avg).toFixed(1)} ms faster than a Postgres list query (${saving.toFixed(0)}% saving).`
+      );
+      console.log(
+        `But a MISS costs ${miss.avg.toFixed(1)} ms total (Postgres + Redis SET), and every L1-free read is a full REST round trip.`
+      );
+    } else {
+      const penalty = ((hit.avg - pg.avg) / pg.avg) * 100;
+      console.log(
+        `Redis cache HIT is ${(hit.avg - pg.avg).toFixed(1)} ms SLOWER than a direct Postgres list query (+${penalty.toFixed(0)}%).`
+      );
+      console.log('The cache is currently costing more than it saves for reads.');
+    }
+    console.log(`\nNumbers are averages over ${ITERATIONS} runs (ms).`);
   });
-
-  await redis.del(key).catch(() => {});
-  await pool.end();
-
-  console.log('\n--- verdict ---');
-  if (hit.avg < pg.avg) {
-    const saving = ((pg.avg - hit.avg) / pg.avg) * 100;
-    console.log(
-      `Redis cache HIT is ${(pg.avg - hit.avg).toFixed(1)} ms faster than a Postgres list query (${saving.toFixed(0)}% saving).`
-    );
-    console.log(
-      `But a MISS costs ${miss.avg.toFixed(1)} ms total (Postgres + Redis SET), and every L1-free read is a full REST round trip.`
-    );
-  } else {
-    const penalty = ((hit.avg - pg.avg) / pg.avg) * 100;
-    console.log(
-      `Redis cache HIT is ${(hit.avg - pg.avg).toFixed(1)} ms SLOWER than a direct Postgres list query (+${penalty.toFixed(0)}%).`
-    );
-    console.log('The cache is currently costing more than it saves for reads.');
-  }
-  console.log(`\nNumbers are averages over ${ITERATIONS} runs (ms).`);
-})();
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -57,10 +57,7 @@ async function findEligibleConcepts(userId, boardId, { tagIds, includeKnown, mat
  * @returns {Promise<object>} Created quiz row (with quiz_id).
  */
 async function createRun(userId, boardId, { quizSettingsId, timeElapsedMs, results }) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  return pool.transaction(async (client) => {
     const quizResult = await client.query(
       `INSERT INTO quiz (board_id, quiz_settings_id, questions_count, time_elapsed_ms, correct_count)
        SELECT $1, $2, $3, $4, $5
@@ -110,14 +107,8 @@ async function createRun(userId, boardId, { quizSettingsId, timeElapsedMs, resul
       );
     }
 
-    await client.query('COMMIT');
     return quiz;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**

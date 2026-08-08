@@ -7,7 +7,7 @@
  *   - the current password must be present and verified against the stored hash
  *   - the new password is hashed and written via the dedicated
  *     userRepository.updatePassword() credential query
- *   - accounts without a password (Google-only) can't change one
+ *   - accounts without a stored hash can't change one
  *   - missing fields / wrong current password map to 400 / 401
  *
  * The real repository + database behavior is covered by
@@ -25,7 +25,6 @@ const USER = {
   email: 'ada@example.com',
   full_name: null,
   password_hash: 'hashed-old-password',
-  google_id: null,
   email_verified: true,
 };
 
@@ -68,7 +67,7 @@ describe('passwordService.changePassword', () => {
     expect(userRepository.updatePassword).not.toHaveBeenCalled();
   });
 
-  it('rejects with 400 when the account has no password (Google-only)', async () => {
+  it('rejects with 400 when the account has no password', async () => {
     userRepository.findById.mockResolvedValue({ ...USER, password_hash: null });
 
     await expect(passwordService.changePassword('user-1', 'old-pass', 'new-pass')).rejects.toMatchObject({

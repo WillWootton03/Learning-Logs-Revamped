@@ -2,8 +2,8 @@
  * Derive a display name and initials from a user's full name or, as a
  * fallback, their email's local part.
  *
- * The profile lets a user set a full name (Google sign-in pre-fills it); when
- * none is set the UI falls back to deriving a friendly name from the email:
+ * The profile lets a user set a full name; when none is set the UI falls back
+ * to deriving a friendly name from the email:
  * alex@example.com -> "Alex" / "AL". Helpers accept undefined/null so callers
  * never render an empty string.
  */

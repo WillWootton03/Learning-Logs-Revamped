@@ -10,7 +10,5 @@ router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.post('/logout', authController.logout);
 router.post('/refresh', authController.refresh);
-router.get('/google', authController.googleStart);
-router.get('/google/callback', authController.googleCallback);
 
 module.exports = router;

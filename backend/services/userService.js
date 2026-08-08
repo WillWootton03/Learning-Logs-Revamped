@@ -1,4 +1,6 @@
 const userRepository = require('../repositories/userRepository');
+const { pool } = require('../db/pool');
+const { disposableEmailChecker } = require('./disposableEmailChecker');
 const AppError = require('./AppError');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -11,6 +13,19 @@ const MAX_FULL_NAME_LENGTH = 100;
  */
 function validateEmail(email) {
   return typeof email === 'string' && EMAIL_REGEX.test(email);
+}
+
+/**
+ * Reject disposable email providers (mailinator, temp-mail, etc.) at account
+ * creation and when the email is changed, so the platform only ever works with
+ * durable addresses. The check runs right after format validation.
+ * @param {string} email
+ * @throws {AppError} 400 when the domain is a known disposable provider.
+ */
+function assertNotDisposable(email) {
+  if (disposableEmailChecker.isDisposable(email)) {
+    throw new AppError(400, 'Disposable email addresses are not allowed');
+  }
 }
 
 /**
@@ -59,26 +74,34 @@ async function getById(id) {
 
 /**
  * Create a new user after validating email and checking for duplicates.
- * @param {{email: string, fullName?: string|null, passwordHash: string|null, googleId: string|null}} data
+ * @param {{email: string, fullName?: string|null, passwordHash: string|null}} data
  * @returns {Promise<{user_id: string, email: string, full_name: string|null}>}
  * @throws {AppError} 400 invalid email, 409 email already registered.
  */
-async function create({ email, fullName = null, passwordHash, googleId }) {
+async function create({ email, fullName = null, passwordHash }) {
   if (!validateEmail(email)) {
     throw new AppError(400, 'A valid email is required');
   }
+  assertNotDisposable(email);
   if (!validateFullName(fullName)) {
     throw new AppError(400, `Full name must be at most ${MAX_FULL_NAME_LENGTH} characters`);
   }
-  if (await userRepository.findByEmail(email)) {
+  // Pre-login: registration has no session yet, so the duplicate check runs
+  // under the email context (the users RLS policy matches on email).
+  const existing = await pool.runWithContext({ email }, () => userRepository.findByEmail(email));
+  if (existing) {
     throw new AppError(409, 'Email already in use');
   }
-  const userId = await userRepository.create({
-    email,
-    fullName: typeof fullName === 'string' && fullName.trim() ? fullName.trim() : null,
-    passwordHash,
-    googleId,
-  });
+  // The INSERT runs under the email context too: RLS evaluates the RETURNING
+  // clause against the SELECT policy, so the freshly-created row must be
+  // visible to the caller before the id can be handed back.
+  const userId = await pool.runWithContext({ email }, () =>
+    userRepository.create({
+      email,
+      fullName: typeof fullName === 'string' && fullName.trim() ? fullName.trim() : null,
+      passwordHash,
+    })
+  );
   return { user_id: userId, email, full_name: fullName ?? null };
 }
 
@@ -95,11 +118,17 @@ async function update(id, { fullName, email }) {
   if (email !== undefined && !validateEmail(email)) {
     throw new AppError(400, 'A valid email is required');
   }
+  if (email !== undefined) {
+    assertNotDisposable(email);
+  }
   if (fullName !== undefined && !validateFullName(fullName)) {
     throw new AppError(400, `Full name must be at most ${MAX_FULL_NAME_LENGTH} characters`);
   }
   if (email !== undefined) {
-    const existing = await userRepository.findByEmail(email);
+    // Uniqueness check: must see OTHER users' rows, so scope this lookup by
+    // email (the users RLS policy matches on email) rather than by the current
+    // user id.
+    const existing = await pool.runWithContext({ email }, () => userRepository.findByEmail(email));
     // Compare as strings — user_id is a UUID, not a number.
     if (existing && existing.user_id !== id) {
       throw new AppError(409, 'Email already in use');

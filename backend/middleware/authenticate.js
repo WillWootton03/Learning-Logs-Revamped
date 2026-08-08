@@ -1,5 +1,6 @@
 const authService = require('../services/authService');
 const userRepository = require('../repositories/userRepository');
+const { pool } = require('../db/pool');
 const { ACCESS_COOKIE, clearAuthCookies } = require('../utils/cookies');
 
 /**
@@ -17,6 +18,12 @@ const { ACCESS_COOKIE, clearAuthCookies } = require('../utils/cookies');
  * no longer matches the account's current value, the password changed since
  * the token was minted — the session is stale, so the cookies are revoked and
  * the request is rejected, forcing the client back to the login page.
+ *
+ * RLS: the rest of the request runs inside pool.runAsUser(payload.userId), so
+ * the database session's app.current_user_id is set for every query this
+ * request performs and the row-level-security policies in db/schema.sql scope
+ * all reads/writes to this user. The scope is held open until the response
+ * finishes so handlers downstream of next() stay covered.
  */
 async function authenticate(req, res, next) {
   const accessToken = req.cookies[ACCESS_COOKIE];
@@ -32,23 +39,30 @@ async function authenticate(req, res, next) {
   }
 
   try {
-    // Re-check the user exists so tokens minted for deleted accounts stop
-    // working immediately rather than riding out their 1h lifetime.
-    const user = await userRepository.findById(payload.userId);
-    if (!user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    // A password change bumped password_it — tokens issued before it are
-    // stale. Revoke the cookies and demand a fresh login.
-    if (payload.passwordIt !== user.password_it) {
-      clearAuthCookies(res);
-      return res.status(401).json({
-        error: 'Password changed. Please sign in again.',
-        code: 'PASSWORD_CHANGED',
-      });
-    }
-    req.userId = payload.userId;
-    next();
+    await pool.runAsUser(payload.userId, async () => {
+      // Re-check the user exists so tokens minted for deleted accounts stop
+      // working immediately rather than riding out their 1h lifetime.
+      const user = await userRepository.findById(payload.userId);
+      if (!user) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+      // A password change bumped password_it — tokens issued before it are
+      // stale. Revoke the cookies and demand a fresh login.
+      if (payload.passwordIt !== user.password_it) {
+        clearAuthCookies(res);
+        res.status(401).json({
+          error: 'Password changed. Please sign in again.',
+          code: 'PASSWORD_CHANGED',
+        });
+        return;
+      }
+      req.userId = payload.userId;
+      next();
+      // Keep the user context alive until the response completes so every
+      // query downstream of next() is scoped to this user by RLS.
+      await new Promise((resolve) => res.once('finish', resolve));
+    });
   } catch (err) {
     next(err); // genuine server/db failure -> global error handler (500)
   }

@@ -1,10 +1,10 @@
 /**
  * Unit tests for authService.
  *
- * Strategy: every external dependency (bcrypt, jwt, the user repository, and
- * Google's OAuth2Client) is mocked. These tests verify that authService calls
- * its dependencies correctly and enforces the right status codes — they do
- * NOT test the real implementations of hashing, JWT, or Google.
+ * Strategy: every external dependency (bcrypt, jwt, and the user repository)
+ * is mocked. These tests verify that authService calls its dependencies
+ * correctly and enforces the right status codes — they do NOT test the real
+ * implementations of hashing or JWT.
  *
  * Why mock everything?
  *   - Speed: real bcrypt hashing takes ~100ms per call; a mock is instant.
@@ -17,17 +17,12 @@
  * (tests/integration/auth.test.js).
  */
 
-// Set env vars BEFORE importing authService — it reads these at require time
-// (e.g. new OAuth2Client(process.env.GOOGLE_CLIENT_ID, ...)).
+// Set env vars BEFORE importing authService — it reads these at require time.
 process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
-process.env.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
-process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
-process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { OAuth2Client } = require('google-auth-library');
 const authService = require('../../../services/authService');
 const userRepository = require('../../../repositories/userRepository');
 const AppError = require('../../../services/AppError');
@@ -38,35 +33,6 @@ const AppError = require('../../../services/AppError');
 jest.mock('bcryptjs'); // every export becomes a jest.fn()
 jest.mock('jsonwebtoken');
 jest.mock('../../../repositories/userRepository');
-
-// google-auth-library needs a manual factory: OAuth2Client is a class, and we
-// want to control its three methods (generateAuthUrl/getToken/verifyIdToken).
-// The fake class records its instances and delegates each method to a shared
-// jest.fn, so tests can program and assert on them.
-jest.mock('google-auth-library', () => {
-  const mockGenerateAuthUrl = jest.fn();
-  const mockGetToken = jest.fn();
-  const mockVerifyIdToken = jest.fn();
-  class MockOAuth2Client {
-    constructor(...args) {
-      MockOAuth2Client.mockInstances.push(this);
-    }
-    generateAuthUrl(opts) {
-      return mockGenerateAuthUrl(opts);
-    }
-    getToken(code) {
-      return mockGetToken(code);
-    }
-    verifyIdToken(opts) {
-      return mockVerifyIdToken(opts);
-    }
-  }
-  MockOAuth2Client.mockInstances = [];
-  MockOAuth2Client.mockGenerateAuthUrl = mockGenerateAuthUrl;
-  MockOAuth2Client.mockGetToken = mockGetToken;
-  MockOAuth2Client.mockVerifyIdToken = mockVerifyIdToken;
-  return { OAuth2Client: MockOAuth2Client };
-});
 
 describe('authService.hashPassword', () => {
   it('hashes a plaintext password with a salt factor of 10', async () => {
@@ -233,10 +199,10 @@ describe('authService.loginWithPassword', () => {
     });
   });
 
-  it('rejects with 401 for a Google-only account (no password hash)', async () => {
-    // Accounts created via Google OAuth have password_hash = NULL. They can't
-    // log in with a password — same 401 as wrong credentials (no info leak
-    // about which account exists).
+  it('rejects with 401 when the account has no password hash', async () => {
+    // Accounts should always have a password now that Google OAuth is gone,
+    // but a missing hash (e.g. a legacy row) must still yield the same 401 as
+    // wrong credentials — no info leak about which account exists.
     userRepository.findByEmail.mockResolvedValue({
       user_id: 'user-1',
       email: 'a@b.com',
@@ -259,98 +225,6 @@ describe('authService.loginWithPassword', () => {
     await expect(authService.loginWithPassword('a@b.com', 'wrong')).rejects.toMatchObject({
       status: 401,
     });
-  });
-});
-
-describe('authService.getGoogleAuthUrl', () => {
-  it('builds the consent URL with offline access and profile scopes', () => {
-    OAuth2Client.mockGenerateAuthUrl.mockReturnValue('https://accounts.google.com/o/oauth2/auth?...');
-
-    expect(authService.getGoogleAuthUrl()).toBe('https://accounts.google.com/o/oauth2/auth?...');
-    // Pin the OAuth config: offline access (for refresh tokens) and the
-    // openid/email/profile scopes (to read the user's identity).
-    expect(OAuth2Client.mockGenerateAuthUrl).toHaveBeenCalledWith({
-      access_type: 'offline',
-      scope: ['openid', 'email', 'profile'],
-    });
-  });
-});
-
-describe('authService.exchangeGoogleCode', () => {
-  it('returns the id_token from a successful code exchange', async () => {
-    OAuth2Client.mockGetToken.mockResolvedValue({ tokens: { id_token: 'id-token-123' } });
-    await expect(authService.exchangeGoogleCode('the-code')).resolves.toBe('id-token-123');
-  });
-
-  it('rejects with 400 when Google returns no id_token', async () => {
-    OAuth2Client.mockGetToken.mockResolvedValue({ tokens: {} });
-    await expect(authService.exchangeGoogleCode('the-code')).rejects.toMatchObject({
-      status: 400,
-    });
-  });
-});
-
-describe('authService.loginWithGoogle', () => {
-  beforeEach(() => {
-    OAuth2Client.mockVerifyIdToken.mockReset();
-    userRepository.findByGoogleId.mockReset();
-    userRepository.findByEmail.mockReset();
-    userRepository.linkGoogleId.mockReset();
-    userRepository.create.mockReset();
-
-    // Default: a valid Google ticket whose payload identifies the user as
-    // google@example.com / google-sub-1. Individual tests override the repo
-    // lookups to steer which branch runs.
-    OAuth2Client.mockVerifyIdToken.mockResolvedValue({
-      getPayload: () => ({ email: 'google@example.com', sub: 'google-sub-1' }),
-    });
-  });
-
-  it('returns the local user when the google id is already linked', async () => {
-    const row = { user_id: 'user-1', email: 'google@example.com', email_verified: true };
-    userRepository.findByGoogleId.mockResolvedValue(row);
-
-    await expect(authService.loginWithGoogle('id-token')).resolves.toBe(row);
-    // The id_token must be verified against the app's own client id, so a
-    // token minted for a different app is rejected by Google.
-    expect(OAuth2Client.mockVerifyIdToken).toHaveBeenCalledWith({
-      idToken: 'id-token',
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-  });
-
-  it('links google_id to an existing email-only account and returns the refreshed row', async () => {
-    // Same email, no google_id yet: the account is upgraded in place instead
-    // of creating a duplicate. The service re-reads the user afterward so the
-    // caller sees the linked row.
-    userRepository.findByGoogleId.mockResolvedValue(null);
-    userRepository.findByEmail.mockResolvedValue({ user_id: 'user-2', email: 'google@example.com' });
-    userRepository.linkGoogleId.mockResolvedValue('user-2');
-    const linkedRow = { user_id: 'user-2', email: 'google@example.com', email_verified: false };
-    userRepository.findById.mockResolvedValue(linkedRow);
-
-    await expect(authService.loginWithGoogle('id-token')).resolves.toBe(linkedRow);
-    expect(userRepository.linkGoogleId).toHaveBeenCalledWith('user-2', 'google-sub-1', null);
-    expect(userRepository.findById).toHaveBeenCalledWith('user-2');
-  });
-
-  it('creates a new account for a brand-new google user and returns its row', async () => {
-    // Neither google_id nor email exists: a fresh account is created with no
-    // password (Google-only login).
-    userRepository.findByGoogleId.mockResolvedValue(null);
-    userRepository.findByEmail.mockResolvedValue(null);
-    userRepository.create.mockResolvedValue('user-3');
-    const createdRow = { user_id: 'user-3', email: 'google@example.com', email_verified: false };
-    userRepository.findById.mockResolvedValue(createdRow);
-
-    await expect(authService.loginWithGoogle('id-token')).resolves.toBe(createdRow);
-    expect(userRepository.create).toHaveBeenCalledWith({
-      email: 'google@example.com',
-      fullName: null,
-      passwordHash: null,
-      googleId: 'google-sub-1',
-    });
-    expect(userRepository.findById).toHaveBeenCalledWith('user-3');
   });
 });
 

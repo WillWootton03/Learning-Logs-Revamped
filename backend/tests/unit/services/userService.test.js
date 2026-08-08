@@ -3,7 +3,7 @@
  *
  * Strategy: the user repository is mocked, so these tests verify userService's
  * business rules in isolation:
- *   - never leak password_hash or google_id to the API consumer
+ *   - never leak password_hash to the API consumer
  *   - validate emails before hitting the DB
  *   - enforce email uniqueness (with a correct self-comparison for UUIDs)
  *   - map missing rows to 404, duplicates to 409
@@ -17,6 +17,13 @@ const AppError = require('../../../services/AppError');
 
 // Swap the repository for a jest.fn stand-in before userService is used.
 jest.mock('../../../repositories/userRepository');
+// The disposable-email checker is a static dataset lookup; mock it so these
+// tests exercise userService's guard logic, not the blocklist itself (the
+// checker has its own unit tests).
+jest.mock('../../../services/disposableEmailChecker', () => ({
+  disposableEmailChecker: { isDisposable: jest.fn(() => false) },
+}));
+const { disposableEmailChecker } = require('../../../services/disposableEmailChecker');
 
 // A realistic raw DB row, including the sensitive columns the service must
 // strip. Tests reuse this so each case focuses on its own assertion.
@@ -25,7 +32,6 @@ const RAW_USER = {
   email: 'ada@example.com',
   full_name: null,
   password_hash: 'hashed-password',
-  google_id: null,
   email_verified: true,
   created_at: new Date().toISOString(),
 };
@@ -36,9 +42,9 @@ describe('userService.getById', () => {
 
     const result = await userService.getById('user-1');
 
-    // Only the safe fields survive; hash and google_id must never leave the
-    // API. The profile fields are included so the profile/settings pages can
-    // show the display name and join date.
+    // Only the safe fields survive; hash must never leave the API. The profile
+    // fields are included so the profile/settings pages can show the display
+    // name and join date.
     expect(result).toEqual({
       user_id: 'user-1',
       email: 'ada@example.com',
@@ -65,6 +71,8 @@ describe('userService.create', () => {
   beforeEach(() => {
     userRepository.findByEmail.mockReset();
     userRepository.create.mockReset();
+    disposableEmailChecker.isDisposable.mockReset();
+    disposableEmailChecker.isDisposable.mockReturnValue(false);
   });
 
   it('creates a user and returns only safe fields', async () => {
@@ -74,7 +82,6 @@ describe('userService.create', () => {
     const result = await userService.create({
       email: 'ada@example.com',
       passwordHash: 'hashed-password',
-      googleId: null,
     });
 
     expect(result).toEqual({
@@ -82,28 +89,40 @@ describe('userService.create', () => {
       email: 'ada@example.com',
       full_name: null,
     });
-    // The hash and googleId are passed TO the repository (for storage) but the
-    // response is stripped. No display name was provided, so it stays null.
+    // The hash is passed TO the repository (for storage) but the response is
+    // stripped. No display name was provided, so it stays null.
     expect(userRepository.create).toHaveBeenCalledWith({
       email: 'ada@example.com',
       fullName: null,
       passwordHash: 'hashed-password',
-      googleId: null,
     });
   });
 
   it('rejects with 400 for a malformed email', async () => {
     // Validation happens in the service, before any repo call.
     await expect(
-      userService.create({ email: 'not-an-email', passwordHash: 'h', googleId: null })
+      userService.create({ email: 'not-an-email', passwordHash: 'h' })
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('rejects with 400 for a disposable email domain', async () => {
+    disposableEmailChecker.isDisposable.mockReturnValue(true);
+
+    await expect(
+      userService.create({ email: 'spam@mailinator.com', passwordHash: 'h' })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Disposable email addresses are not allowed',
+    });
+    // Guard: a disposable address must never reach the DB.
+    expect(userRepository.create).not.toHaveBeenCalled();
   });
 
   it('rejects with 409 when the email is already registered', async () => {
     userRepository.findByEmail.mockResolvedValue(RAW_USER);
 
     await expect(
-      userService.create({ email: 'ada@example.com', passwordHash: 'h', googleId: null })
+      userService.create({ email: 'ada@example.com', passwordHash: 'h' })
     ).rejects.toMatchObject({ status: 409 });
     // Guard: a duplicate must never attempt the INSERT.
     expect(userRepository.create).not.toHaveBeenCalled();
@@ -115,6 +134,8 @@ describe('userService.update', () => {
     userRepository.findByEmail.mockReset();
     userRepository.update.mockReset();
     userRepository.findById.mockReset();
+    disposableEmailChecker.isDisposable.mockReset();
+    disposableEmailChecker.isDisposable.mockReturnValue(false);
   });
 
   it('updates an email and returns the refreshed safe user', async () => {
@@ -146,6 +167,18 @@ describe('userService.update', () => {
     await expect(userService.update('user-1', { email: 'nope' })).rejects.toMatchObject({
       status: 400,
     });
+  });
+
+  it('rejects with 400 when the new email uses a disposable domain', async () => {
+    disposableEmailChecker.isDisposable.mockReturnValue(true);
+
+    await expect(
+      userService.update('user-1', { email: 'new@tempmail.com' })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Disposable email addresses are not allowed',
+    });
+    expect(userRepository.update).not.toHaveBeenCalled();
   });
 
   it('updates the full name and returns the refreshed safe user', async () => {

@@ -10,7 +10,7 @@ import { request } from "./client";
 // the session surface small.
 export type User = {
   email: string;
-  /** Display name; null until the user (or Google sign-in) provides one. */
+  /** Display name; null until the user provides one. */
   fullName: string | null;
   /** Whether the current email has been verified (false after an email change). */
   emailVerified: boolean;

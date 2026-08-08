@@ -1,9 +1,9 @@
 const { randomUUID } = require('crypto');
 const userRepository = require('../repositories/userRepository');
+const { pool } = require('../db/pool');
 const AppError = require('./AppError');
 const { passwordHasher } = require('./passwordHasher');
 const { jwtService } = require('./jwtService');
-const { googleAuthClient } = require('./googleAuthClient');
 
 const ACCESS_TTL = jwtService.constructor.ACCESS_TTL;
 const REFRESH_TTL = jwtService.constructor.REFRESH_TTL;
@@ -69,7 +69,7 @@ function signAccessToken(userId, passwordIt) {
 
 /**
  * Sign both the access (1h) and refresh (30d) JWTs for a user.
- * Used on first login (register/login/google). The refresh token is issued
+ * Used on first login (register/login). The refresh token is issued
  * exactly once here and is static thereafter; only access tokens get minted
  * again (by signAccessToken on /auth/refresh).
  * Uses separate secrets so a leaked access token can't mint refresh tokens.
@@ -104,7 +104,7 @@ function verifyRefreshToken(token) {
 
 /**
  * Authenticate with email + password and return the user row.
- * Throws 401 for unknown users, Google-only accounts, or a bad password.
+ * Throws 401 for unknown users or a bad password.
  * The caller decides what to do about an unverified email (issue a code and
  * refuse to sign the user in).
  * @param {string} email
@@ -113,72 +113,15 @@ function verifyRefreshToken(token) {
  *   including password_hash for verification and password_it for tokens).
  */
 async function loginWithPassword(email, password) {
-  const user = await userRepository.findByEmail(email);
+  // No session exists yet — publish the email so the RLS policy on users
+  // (users_self) lets this lookup through before any user id is known.
+  const user = await pool.runWithContext({ email }, () => userRepository.findByEmail(email));
   if (!user || !user.password_hash) {
     throw new AppError(401, 'Invalid credentials');
   }
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
     throw new AppError(401, 'Invalid credentials');
-  }
-  return user;
-}
-
-/**
- * Build the Google consent screen URL the browser is redirected to.
- * @returns {string} Full Google OAuth authorize URL.
- */
-function getGoogleAuthUrl() {
-  return googleAuthClient.getAuthUrl();
-}
-
-/**
- * Exchange the Google authorization code for tokens and return the id_token.
- * @param {string} code - One-time code from Google's callback query string.
- * @returns {Promise<string>} Google id_token used to identify the user.
- */
-async function exchangeGoogleCode(code) {
-  const { tokens } = await googleAuthClient.getToken(code);
-  if (!tokens.id_token) {
-    throw new AppError(400, 'Google did not return an ID token');
-  }
-  return tokens.id_token;
-}
-
-/**
- * Verify a Google id_token and resolve it to a local user, creating or
- * linking an account as needed (upsert on email or google_id). Returns the
- * full user row so the caller can check email_verified.
- * @param {string} idToken - Google id_token from the OAuth callback.
- * @returns {Promise<object>} The local user's row (full record).
- */
-async function loginWithGoogle(idToken) {
-  const ticket = await googleAuthClient.verifyIdToken({
-    idToken,
-    audience: process.env.GOOGLE_CLIENT_ID,
-  });
-  const payload = ticket.getPayload();
-  const email = payload.email;
-  const googleId = payload.sub;
-  // Google's profile name (may be absent) — used to pre-fill the display name.
-  const fullName = typeof payload.name === 'string' ? payload.name : null;
-
-  let user = await userRepository.findByGoogleId(googleId);
-  if (!user) {
-    user = await userRepository.findByEmail(email);
-    if (user) {
-      const userId = await userRepository.linkGoogleId(user.user_id, googleId, fullName);
-      user = await userRepository.findById(userId);
-      return user;
-    }
-    const userId = await userRepository.create({
-      email,
-      fullName,
-      passwordHash: null,
-      googleId,
-    });
-    user = await userRepository.findById(userId);
-    return user;
   }
   return user;
 }
@@ -193,8 +136,5 @@ module.exports = {
   signAccessToken,
   verifyAccessToken,
   verifyRefreshToken,
-  getGoogleAuthUrl,
-  exchangeGoogleCode,
   loginWithPassword,
-  loginWithGoogle,
 };

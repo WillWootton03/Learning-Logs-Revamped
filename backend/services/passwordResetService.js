@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const authService = require('./authService');
 const userRepository = require('../repositories/userRepository');
 const passwordResetRepository = require('../repositories/passwordResetRepository');
+const { pool } = require('../db/pool');
 const { mailer } = require('./mailer');
 const AppError = require('./AppError');
 
@@ -31,10 +32,17 @@ function generateToken() {
  * @returns {Promise<{ok: true}>}
  */
 async function requestReset(email) {
-  const user = await userRepository.findByEmail(email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  // Pre-login: scope the email lookup and the token upsert by the RLS policy
+  // keys they match (email for the lookup, then the resolved user id).
+  const user = await pool.runWithContext({ email: normalized }, () =>
+    userRepository.findByEmail(normalized)
+  );
   if (user) {
     const token = generateToken();
-    await passwordResetRepository.upsert(user.user_id, token);
+    await pool.runWithContext({ userId: user.user_id }, () =>
+      passwordResetRepository.upsert(user.user_id, token)
+    );
     await mailer.sendPasswordResetEmail(user.email, { token });
   }
   return { ok: true };
@@ -52,7 +60,11 @@ async function resetPassword(token, newPassword) {
   if (!token) {
     throw new AppError(400, 'A reset token is required', 'RESET_TOKEN_REQUIRED');
   }
-  const row = await passwordResetRepository.findByToken(token);
+  // Pre-login: the token lookup is scoped by the reset-token policy key, and
+  // the password write by the resolved user id.
+  const row = await pool.runWithContext({ resetToken: token }, () =>
+    passwordResetRepository.findByToken(token)
+  );
   if (!row) {
     throw new AppError(400, 'This reset link is invalid. Request a new one.', 'RESET_TOKEN_INVALID');
   }
@@ -62,8 +74,12 @@ async function resetPassword(token, newPassword) {
   }
   authService.validatePasswordStrength(newPassword);
   const passwordHash = await authService.hashPassword(newPassword);
-  await userRepository.updatePassword(row.user_id, passwordHash);
-  await passwordResetRepository.deleteByToken(token);
+  await pool.runWithContext({ userId: row.user_id }, () =>
+    userRepository.updatePassword(row.user_id, passwordHash)
+  );
+  await pool.runWithContext({ userId: row.user_id }, () =>
+    passwordResetRepository.deleteByToken(token)
+  );
   return { ok: true };
 }
 

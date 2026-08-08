@@ -14,12 +14,5 @@ process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'test-access-se
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'test-refresh-secret';
 process.env.JWT_EMAIL_SECRET = process.env.JWT_EMAIL_SECRET || 'test-email-secret';
 
-// Frontend origin used for OAuth/verification redirect URLs in tests.
+// Frontend origin used for verification redirect URLs in tests.
 process.env.FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-// Dummy Google credentials so authService can construct its OAuth2Client.
-// /auth/google/callback still requires a real Google exchange, so it is not
-// exercised against live Google here.
-process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-client-id.apps.googleusercontent.com';
-process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-client-secret';
-process.env.GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback';

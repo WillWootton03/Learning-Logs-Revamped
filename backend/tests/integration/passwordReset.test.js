@@ -32,9 +32,14 @@ const { mailer } = require('../../services/mailer');
 
 const VALID_USER = { email: 'ada@example.com', password: 'Password123!' };
 
-/** Read the stored reset token for a user directly from the DB. */
+/**
+ * Read the stored reset token for a user directly from the DB. password_resets
+ * is RLS-scoped, so the read runs under the user's own context.
+ */
 async function storedToken(userId) {
-  const result = await pool.query('SELECT token FROM password_resets WHERE user_id = $1', [userId]);
+  const result = await pool.runWithContext({ userId }, () =>
+    pool.query('SELECT token FROM password_resets WHERE user_id = $1', [userId])
+  );
   return result.rows[0] ? result.rows[0].token : null;
 }
 
@@ -95,7 +100,9 @@ describe('POST /auth/forgot-password', () => {
     expect(second).toBeDefined();
     expect(second).not.toBe(first);
     // Still exactly one row for the user.
-    const count = await pool.query('SELECT COUNT(*)::int AS n FROM password_resets WHERE user_id = $1', [user.user_id]);
+    const count = await pool.runWithContext({ userId: user.user_id }, () =>
+      pool.query('SELECT COUNT(*)::int AS n FROM password_resets WHERE user_id = $1', [user.user_id])
+    );
     expect(count.rows[0].n).toBe(1);
   });
 
@@ -145,10 +152,14 @@ describe('POST /auth/reset-password', () => {
     const { user } = await registerVerifiedUser(VALID_USER);
     await request(app).post('/auth/forgot-password').send({ email: VALID_USER.email });
     const token = await storedToken(user.user_id);
-    // Age the token past the 1h TTL.
-    await pool.query(
-      `UPDATE password_resets SET requested_at = now() - interval '2 hours' WHERE token = $1`,
-      [token]
+    // Age the token past the 1h TTL. The password_resets WITH CHECK clause only
+    // permits writes under the owning user's id, so the aging update runs with
+    // the userId context (the same identity the app uses when consuming a token).
+    await pool.runWithContext({ userId: user.user_id }, () =>
+      pool.query(
+        `UPDATE password_resets SET requested_at = now() - interval '2 hours' WHERE token = $1`,
+        [token]
+      )
     );
 
     const res = await request(app)

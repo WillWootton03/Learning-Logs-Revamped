@@ -22,6 +22,7 @@ const app = require('../../app');
 const { truncateAll } = require('./helpers/db');
 const { registerVerifiedUser } = require('./helpers/auth');
 const userRepository = require('../../repositories/userRepository');
+const { pool } = require('../../db/pool');
 
 jest.mock('../../services/mailer', () => ({
   mailer: {
@@ -86,6 +87,17 @@ describe('POST /auth/register', () => {
       password: 'Password123!',
     });
     expect(res.status).toBe(400);
+  });
+
+  it('rejects a disposable email address with 400', async () => {
+    // mailinator.com is on the shipped disposable blocklist — registration must
+    // refuse it before any account is created.
+    const res = await request(app).post('/auth/register').send({
+      email: 'temp@mailinator.com',
+      password: 'Password123!',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Disposable email addresses are not allowed');
   });
 
   it('rejects missing credentials with 400', async () => {
@@ -183,14 +195,17 @@ describe('POST /auth/login', () => {
 describe('POST /auth/resend-verification', () => {
   it('emails a fresh code to an unverified account', async () => {
     // Create the account directly (no registration email), so no cooldown is
-    // active and the resend is allowed to send.
+    // active and the resend is allowed to send. The insert runs under the email
+    // context (like the real register flow) so RLS lets the RETURNING row
+    // through.
     const passwordHash = await bcrypt.hash('password123', 10);
-    await userRepository.create({
-      email: VALID_USER.email,
-      fullName: null,
-      passwordHash,
-      googleId: null,
-    });
+    await pool.runWithContext({ email: VALID_USER.email }, () =>
+      userRepository.create({
+        email: VALID_USER.email,
+        fullName: null,
+        passwordHash,
+      })
+    );
 
     const res = await request(app).post('/auth/resend-verification').send({ email: VALID_USER.email });
 
@@ -359,13 +374,5 @@ describe('authenticate middleware (pure auth — refresh lives on /auth/refresh)
       .set('Cookie', `access_token=${newAccess}`);
     expect(retry.status).toBe(200);
     expect(retry.body.email).toBe(VALID_USER.email);
-  });
-});
-
-describe('GET /auth/google', () => {
-  it('redirects to the Google consent screen', async () => {
-    const res = await request(app).get('/auth/google');
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toContain('accounts.google.com');
   });
 });
