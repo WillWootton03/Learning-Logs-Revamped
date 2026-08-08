@@ -96,6 +96,10 @@ jobs:
     # runner's own process talks outbound to GitHub and executes these
     # commands locally on the server.
     runs-on: self-hosted
+    # A stuck run must never hang the workflow forever (e.g. an offline runner
+    # can't ACK a cancel and leaves a job "running" in the UI). The deploy is
+    # normally seconds, so 15 minutes is a generous ceiling.
+    timeout-minutes: 15
     steps:
       - name: Deploy latest images
         run: |
