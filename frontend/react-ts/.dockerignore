@@ -1,0 +1,8 @@
+# Keep the build context lean and never ship host node_modules (the image's
+# Linux-native install must not be overwritten) or env files with secrets.
+node_modules
+dist
+.env
+.env.*
+*.local
+.git

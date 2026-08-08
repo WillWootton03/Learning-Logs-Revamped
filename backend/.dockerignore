@@ -1,0 +1,10 @@
+# Keep the build context lean and — critically — never ship secrets or host
+# node_modules into the image (the Linux-native install in the Dockerfile must
+# not be overwritten by a Windows/macOS node_modules).
+node_modules
+dist
+coverage
+.env
+.env.*
+*.log
+.git

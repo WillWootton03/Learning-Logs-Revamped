@@ -1,0 +1,59 @@
+# Learning Logs — test stack.
+#
+# Runs the backend test suite inside its OWN image (learninglogs-backend-test),
+# built from the `test` target of backend/Dockerfile. This stack is fully
+# isolated from the dev stack:
+#   - different compose project (learninglogs-test vs learninglogs-dev)
+#   - different image name (learninglogs-backend-test vs learninglogs-backend)
+#   - different container (removed on exit) — the dev containers keep running
+#     untouched while tests spin up and tear down.
+#
+# Run — the --rm flag removes the container as soon as the suite exits:
+#   docker compose -f docker-compose.test.yaml run --rm backend-test
+#
+# Integration tests need a real PostgreSQL. TEST_DATABASE_URL /
+# TEST_DATABASE_ADMIN_URL are injected from backend/.env (env_file), so the
+# suite runs against whatever test DB the .env points at — same as on the host.
+
+name: learninglogs-test
+
+services:
+  backend-test:
+    build:
+      context: ./backend
+      target: test
+    image: learninglogs-backend-test
+    # Runs `npm test && npm run test:integration` from the Dockerfile's test
+    # target. Source is bind-mounted so tests always run the latest code; drop
+    # the volumes to run exactly what the built image contains.
+    environment:
+      NODE_ENV: test
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+# ---------------------------------------------------------------------------
+# Shell commands — run these from the repo root.
+# ---------------------------------------------------------------------------
+# Run the full test suite (unit then integration) in an isolated container.
+# --rm removes the container as soon as the suite exits, so the dev containers
+# are never affected:
+#   docker compose -f docker-compose.test.yaml run --rm backend-test
+#
+# Rebuild the test image before a run (needed after package.json/Dockerfile
+# changes; otherwise the cached build is used):
+#   docker compose -f docker-compose.test.yaml build backend-test
+#
+# Run only the unit tests (no DB required):
+#   docker compose -f docker-compose.test.yaml run --rm backend-test npm test
+#
+# Run only the integration tests (needs TEST_DATABASE_URL in backend/.env):
+#   docker compose -f docker-compose.test.yaml run --rm backend-test npm run test:integration
+#
+# Clean up leftover containers/networks from interrupted runs:
+#   docker compose -f docker-compose.test.yaml down
+#
+# Remove the test image itself when you no longer need it:
+#   docker rmi learninglogs-backend-test

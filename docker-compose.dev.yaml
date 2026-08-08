@@ -1,0 +1,86 @@
+# Learning Logs — development stack.
+#
+# Two services, two images:
+#   backend  → Express API on :3000 (hot-reloaded with `node --watch`)
+#   frontend → Vite dev server on :5173 (HMR)
+#
+# Run:
+#   docker compose -f docker-compose.dev.yaml up --build
+#
+# Both services bind-mount their source so edits apply without rebuilds. An
+# anonymous /app/node_modules volume pins the container's Linux-native install,
+# so the host's node_modules (Windows/macOS binaries) never leak in.
+#
+# Secrets (DATABASE_URL, JWT_*, SMTP_*, UPSTASH_*) come from backend/.env via
+# env_file — they are read at container start, never baked into the image.
+#
+# First-time DB setup (schema + restricted RLS app role) is a one-off against
+# your Postgres, run inside the backend container:
+#   docker compose -f docker-compose.dev.yaml exec backend npm run db:role
+#   docker compose -f docker-compose.dev.yaml exec backend npm run db:setup
+
+name: learninglogs-dev
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    image: learninglogs-backend
+    # Runs `node --watch bin/www` from the Dockerfile's dev target.
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend/react-ts
+    image: learninglogs-frontend
+    # Vite binds 0.0.0.0 already (see Dockerfile CMD); CHOKIDAR_USEPOLLING
+    # keeps HMR reliable when bind-mounting from a Windows host.
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    env_file:
+      - ./frontend/react-ts/.env
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/react-ts:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# ---------------------------------------------------------------------------
+# Shell commands — run these from the repo root.
+# ---------------------------------------------------------------------------
+# Build + start the dev stack in the background (backend :3000, frontend :5173):
+#   docker compose -f docker-compose.dev.yaml up -d --build
+#
+# Stream the logs from both containers:
+#   docker compose -f docker-compose.dev.yaml logs -f
+#
+# Follow just one service:
+#   docker compose -f docker-compose.dev.yaml logs -f backend
+#
+# Stop the dev containers (keeps images + named volumes for a fast restart):
+#   docker compose -f docker-compose.dev.yaml stop
+#
+# Fully tear down the dev stack — removes containers, network, and any
+# anonymous volumes (source code and node_modules are NOT deleted):
+#   docker compose -f docker-compose.dev.yaml down
+#
+# One-off shell inside a running service (e.g. to run DB setup):
+#   docker compose -f docker-compose.dev.yaml exec backend sh
+#
+# First-time DB setup against your Postgres (restricted RLS app role + schema):
+#   docker compose -f docker-compose.dev.yaml exec backend npm run db:role
+#   docker compose -f docker-compose.dev.yaml exec backend npm run db:setup
+#
+# Rebuild only the backend image after a Dockerfile/package change:
+#   docker compose -f docker-compose.dev.yaml build backend
