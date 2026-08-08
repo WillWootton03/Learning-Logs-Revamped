@@ -88,8 +88,12 @@ jobs:
     name: Deploy to EC2
     needs: build-and-push
     runs-on: ubuntu-latest
-    # Skip until the deployment secrets are configured.
-    if: secrets.EC2_HOST != ''
+    # The `secrets` context isn't available in `if:` conditions, so the host is
+    # copied into a job-level env var first and checked against that. This
+    # skips the job entirely until EC2_* secrets are configured in the repo.
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+    if: env.EC2_HOST != ''
 
     steps:
       - uses: appleboy/ssh-action@v1.2.0
