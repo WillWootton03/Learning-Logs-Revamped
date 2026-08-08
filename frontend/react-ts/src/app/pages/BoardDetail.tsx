@@ -14,10 +14,14 @@ import {
 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import { AddConceptModal } from "../components/AddConceptModal";
 import { CSVUploadModal } from "../components/CSVUploadModal";
 import { SessionModal } from "../components/SessionModal";
 import { BackButton } from "../components/BackButton";
+
+/** How many concepts on the board page are rendered before the scroll sentinel appends more. */
+const DISPLAY_PAGE_SIZE = 10;
 
 export function BoardDetail() {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +40,9 @@ export function BoardDetail() {
   const board = boards.find((b) => b.id === id);
   const boardConcepts = id ? concepts[id] ?? [] : [];
   const isLoading = loadedFor !== id;
+  // Only the slice that fits the viewport is rendered; the rest stay in
+  // memory until the sentinel pulls them in as the user scrolls.
+  const { visible, hasMore, sentinelRef } = useIncrementalList(boardConcepts, DISPLAY_PAGE_SIZE, id ?? undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -172,10 +179,16 @@ export function BoardDetail() {
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
               <p className="text-sm">{loadError}</p>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setLoadError(null);
                   setLoadedFor(null);
-                  loadConcepts(id!);
+                  try {
+                    await loadConcepts(id!);
+                    setLoadedFor(id!);
+                  } catch (err) {
+                    setLoadError(err instanceof Error ? err.message : "Failed to load concepts");
+                    setLoadedFor(id!);
+                  }
                 }}
                 className="text-primary text-sm hover:underline"
               >
@@ -188,43 +201,52 @@ export function BoardDetail() {
               <p className="text-sm">No concepts yet. Add your first one.</p>
             </div>
           ) : (
-            boardConcepts.map((concept, i) => (
-              <motion.div
-                key={concept.id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.04 }}
-                onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
-                className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer group"
-              >
-                <div className="shrink-0">
-                  {concept.learned ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <Circle className="w-4 h-4 text-muted-foreground" />
+            <>
+              {visible.map((concept, i) => (
+                <motion.div
+                  key={concept.id}
+                  // Rows animate in on mount, but sentinel-appended rows get a
+                  // fast, delay-free transition so the list never leaves a
+                  // blank region you can scroll into while they appear.
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.04 }}
+                  onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
+                  className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer group"
+                >
+                  <div className="shrink-0">
+                    {concept.learned ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <Circle className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>
+                      {concept.title}
+                    </p>
+                    {concept.tags.length > 0 && (
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {concept.tags.map((tag) => (
+                          <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {concept.lastReviewed && (
+                    <span className="text-[11px] text-muted-foreground font-mono shrink-0 hidden sm:block">
+                      {concept.lastReviewed}
+                    </span>
                   )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>
-                    {concept.title}
-                  </p>
-                  {concept.tags.length > 0 && (
-                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      {concept.tags.map((tag) => (
-                        <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {concept.lastReviewed && (
-                  <span className="text-[11px] text-muted-foreground font-mono shrink-0 hidden sm:block">
-                    {concept.lastReviewed}
-                  </span>
-                )}
-              </motion.div>
-            ))
+                </motion.div>
+              ))}
+              {/* Sentinel for scroll-driven rendering: the useIncrementalList hook
+                  watches this element and appends the next slice of concepts once
+                  it reaches the viewport. */}
+              {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
+            </>
           )}
         </div>
       </main>

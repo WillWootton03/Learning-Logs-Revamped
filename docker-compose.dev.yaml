@@ -78,7 +78,7 @@ services:
 # One-off shell inside a running service (e.g. to run DB setup):
 #   docker compose -f docker-compose.dev.yaml exec backend sh
 #
-# First-time DB setup against your Postgres (restricted RLS app role + schema):
+# First-time DB setup against Postgres (restricted RLS app role + schema):
 #   docker compose -f docker-compose.dev.yaml exec backend npm run db:role
 #   docker compose -f docker-compose.dev.yaml exec backend npm run db:setup
 #

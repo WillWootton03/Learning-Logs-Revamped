@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Search, CheckCircle2, Circle, Plus, Upload, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import { AddConceptModal } from "../components/AddConceptModal";
 import { CSVUploadModal } from "../components/CSVUploadModal";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -11,6 +12,14 @@ import { BackButton } from "../components/BackButton";
 import { fuzzyMatch } from "../lib/search";
 
 type Filter = "all" | "learned" | "unlearned";
+
+/**
+ * All concepts are fetched up front (one request, no server pagination);
+ * the list is rendered in slices so only what fits on screen (plus one slice
+ * of headroom) reaches the DOM. A sentinel at the bottom of the list appends
+ * the next slice as the user scrolls.
+ */
+const DISPLAY_PAGE_SIZE = 10;
 
 export function AllConcepts() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +42,21 @@ export function AllConcepts() {
   const board = boards.find((b) => b.id === id);
   const all = id ? concepts[id] ?? [] : [];
   const isLoading = loadedFor !== id;
+
+  const filtered = all.filter((c) => {
+    // Search matches the prompt OR the answer, fuzzy (typo-tolerant).
+    if (search && !fuzzyMatch(search, c.title) && !fuzzyMatch(search, c.answer)) return false;
+    if (filter === "learned" && !c.learned) return false;
+    if (filter === "unlearned" && c.learned) return false;
+    // A concept must have every selected tag to match.
+    for (const tag of tagFilters) {
+      if (!c.tags.includes(tag)) return false;
+    }
+    return true;
+  });
+  // Only the slice that fits the viewport is rendered; the rest stay in
+  // memory until the sentinel pulls them in as the user scrolls.
+  const { visible, hasMore, sentinelRef } = useIncrementalList(filtered, DISPLAY_PAGE_SIZE, id ?? undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -99,18 +123,6 @@ export function AllConcepts() {
       return next;
     });
   }
-
-  const filtered = all.filter((c) => {
-    // Search matches the prompt OR the answer, fuzzy (typo-tolerant).
-    if (search && !fuzzyMatch(search, c.title) && !fuzzyMatch(search, c.answer)) return false;
-    if (filter === "learned" && !c.learned) return false;
-    if (filter === "unlearned" && c.learned) return false;
-    // A concept must have every selected tag to match.
-    for (const tag of tagFilters) {
-      if (!c.tags.includes(tag)) return false;
-    }
-    return true;
-  });
 
   return (
     <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
@@ -218,10 +230,16 @@ export function AllConcepts() {
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
               <p className="text-sm">{loadError}</p>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setLoadError(null);
                   setLoadedFor(null);
-                  loadConcepts(id!);
+                  try {
+                    await loadConcepts(id!);
+                    setLoadedFor(id!);
+                  } catch (err) {
+                    setLoadError(err instanceof Error ? err.message : "Failed to load concepts");
+                    setLoadedFor(id!);
+                  }
                 }}
                 className="text-primary text-sm hover:underline"
               >
@@ -233,49 +251,58 @@ export function AllConcepts() {
               <p className="text-sm">No concepts match.</p>
             </div>
           ) : (
-            filtered.map((concept) => (
-              <motion.div
-                key={concept.id}
-                layout
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
-                className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer"
-              >
-                {concept.learned ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                ) : (
-                  <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>{concept.title}</p>
-                  {concept.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {concept.tags.map((tag) => (
-                        <button
-                          key={tag}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTag(tag);
-                          }}
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-mono transition-colors ${
-                            tagFilters.has(tag)
-                              ? "bg-primary/20 text-primary"
-                              : "bg-secondary text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {tag}
-                        </button>
-                      ))}
-                    </div>
+            <>
+              {visible.map((concept, i) => (
+                <motion.div
+                  key={concept.id}
+                  // Rows animate in on mount, but sentinel-appended rows get a
+                  // fast, delay-free transition so the list never leaves a
+                  // blank region you can scroll into while they appear.
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.03 }}
+                  onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
+                  className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer"
+                >
+                  {concept.learned ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  ) : (
+                    <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   )}
-                </div>
-                {concept.lastReviewed && (
-                  <span className="text-[11px] text-muted-foreground font-mono flex-shrink-0 hidden sm:block">{concept.lastReviewed}</span>
-                )}
-              </motion.div>
-            ))
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>{concept.title}</p>
+                    {concept.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {concept.tags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTag(tag);
+                            }}
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-mono transition-colors ${
+                              tagFilters.has(tag)
+                                ? "bg-primary/20 text-primary"
+                                : "bg-secondary text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {concept.lastReviewed && (
+                    <span className="text-[11px] text-muted-foreground font-mono flex-shrink-0 hidden sm:block">{concept.lastReviewed}</span>
+                  )}
+                </motion.div>
+              ))}
+              {/* Sentinel for scroll-driven rendering: the useIncrementalList
+                  hook watches this element and appends the next slice of
+                  concepts once it reaches the viewport. The data was already
+                  fetched in full — this only gates DOM output. */}
+              {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
+            </>
           )}
         </div>
       </div>

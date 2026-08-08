@@ -4,10 +4,14 @@ import { motion } from "motion/react";
 import { CheckCircle2, Circle, Plus, Tag, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useConcepts } from "../context/ConceptContext";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import { listTags } from "../lib/api";
 import { TagModal } from "../components/TagModal";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { BackButton } from "../components/BackButton";
+
+/** How many tag cards are rendered before the scroll sentinel appends more. */
+const DISPLAY_PAGE_SIZE = 12;
 
 export function AllTags() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +31,21 @@ export function AllTags() {
   const board = boards.find((b) => b.id === id);
   const all = id ? concepts[id] ?? [] : [];
   const isLoading = loadedFor !== id;
+
+  // Build tag → concepts map. Seed it from the board's own tag table so tags
+  // with no concepts (e.g. freshly created ones) still show up as cards.
+  const tagMap: Record<string, typeof all> = {};
+  for (const tag of boardTags) tagMap[tag.name] = [];
+  for (const concept of all) {
+    for (const tag of concept.tags) {
+      if (!tagMap[tag]) tagMap[tag] = [];
+      tagMap[tag].push(concept);
+    }
+  }
+  const tags = Object.keys(tagMap).sort();
+  // Only the slice that fits the viewport is rendered; the rest stay in
+  // memory until the sentinel pulls them in as the user scrolls.
+  const { visible, hasMore, sentinelRef } = useIncrementalList(tags, DISPLAY_PAGE_SIZE, id ?? undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -96,18 +115,6 @@ export function AllTags() {
     );
   }
 
-  // Build tag → concepts map. Seed it from the board's own tag table so tags
-  // with no concepts (e.g. freshly created ones) still show up as cards.
-  const tagMap: Record<string, typeof all> = {};
-  for (const tag of boardTags) tagMap[tag.name] = [];
-  for (const concept of all) {
-    for (const tag of concept.tags) {
-      if (!tagMap[tag]) tagMap[tag] = [];
-      tagMap[tag].push(concept);
-    }
-  }
-  const tags = Object.keys(tagMap).sort();
-
   return (
     <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
       <div className="flex flex-col gap-4">
@@ -146,10 +153,16 @@ export function AllTags() {
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
           <p className="text-sm">{loadError}</p>
           <button
-            onClick={() => {
+            onClick={async () => {
               setLoadError(null);
               setLoadedFor(null);
-              reload();
+              try {
+                await reload();
+                setLoadedFor(id!);
+              } catch (err) {
+                setLoadError(err instanceof Error ? err.message : "Failed to load board");
+                setLoadedFor(id!);
+              }
             }}
             className="text-primary text-sm hover:underline"
           >
@@ -162,55 +175,64 @@ export function AllTags() {
           <p className="text-sm">No tags on this board yet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tags.map((tag, i) => {
-            const tagConcepts = tagMap[tag];
-            const learnedCount = tagConcepts.filter((c) => c.learned).length;
-            const progress =
-              tagConcepts.length > 0 ? Math.round((learnedCount / tagConcepts.length) * 100) : 0;
-            return (
-              <motion.div
-                key={tag}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.05 }}
-                className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3 hover:border-primary/30 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-mono text-foreground">#{tag}</span>
-                  <span className="text-[11px] font-mono text-muted-foreground">{learnedCount}/{tagConcepts.length}</span>
-                </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visible.map((tag, i) => {
+              const tagConcepts = tagMap[tag];
+              const learnedCount = tagConcepts.filter((c) => c.learned).length;
+              const progress =
+                tagConcepts.length > 0 ? Math.round((learnedCount / tagConcepts.length) * 100) : 0;
+              return (
+                <motion.div
+                  key={tag}
+                  // Rows animate in on mount, but sentinel-appended rows get a
+                  // fast, delay-free transition so the list never leaves a
+                  // blank region you can scroll into while they appear.
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.05 }}
+                  className="bg-card border border-border rounded-xl p-5 flex flex-col gap-3 hover:border-primary/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-mono text-foreground">#{tag}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{learnedCount}/{tagConcepts.length}</span>
+                  </div>
 
-                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div className="h-full rounded-full bg-primary/60" style={{ width: `${progress}%` }} />
-                </div>
+                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full rounded-full bg-primary/60" style={{ width: `${progress}%` }} />
+                  </div>
 
-                <div className="tag-scrollbox flex flex-col gap-1.5 max-h-40 overflow-y-auto">
-                  {tagConcepts.length === 0 ? (
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">No concepts with this tag yet.</p>
-                  ) : (
-                    tagConcepts.map((concept) => (
-                      <button
-                        key={concept.id}
-                        onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
-                        className="flex items-center gap-2 text-left hover:bg-secondary rounded-lg px-2 py-1.5 transition-colors group"
-                      >
-                        {concept.learned ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        ) : (
-                          <Circle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                        )}
-                        <span className={`text-xs truncate ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>
-                          {concept.title}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+                  <div className="tag-scrollbox flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                    {tagConcepts.length === 0 ? (
+                      <p className="px-2 py-1.5 text-xs text-muted-foreground">No concepts with this tag yet.</p>
+                    ) : (
+                      tagConcepts.map((concept) => (
+                        <button
+                          key={concept.id}
+                          onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
+                          className="flex items-center gap-2 text-left hover:bg-secondary rounded-lg px-2 py-1.5 transition-colors group"
+                        >
+                          {concept.learned ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          ) : (
+                            <Circle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          )}
+                          <span className={`text-xs truncate ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>
+                            {concept.title}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+          {/* Sentinel for scroll-driven rendering: the useIncrementalList hook
+              watches this element and appends the next slice of tag cards once
+              it reaches the viewport. */}
+          {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
+        </>
       )}
 
       <TagModal

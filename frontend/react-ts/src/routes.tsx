@@ -1,4 +1,5 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Outlet } from "react-router";
+import { ScrollToTop } from "./app/components/ScrollToTop";
 import { Root } from "./app/pages/Root";
 import { Landing } from "./app/pages/Landing";
 import { Dashboard } from "./app/pages/Dashboard";
@@ -21,29 +22,39 @@ import { ForgotPassword } from "./app/pages/ForgotPassword";
 import { ResetPassword } from "./app/pages/ResetPassword";
 
 export const router = createBrowserRouter([
-  { path: "/", Component: Landing },
   {
-    path: "/app",
-    Component: Root,
+    Component: () => (
+      <>
+        <ScrollToTop />
+        <Outlet />
+      </>
+    ),
     children: [
-      { index: true, Component: Dashboard },
-      { path: "settings", Component: UserSettings },
-      { path: "profile", Component: Profile },
-      { path: "board/new", Component: NewBoard },
-      { path: "board/:id", Component: BoardDetail },
-      { path: "board/:id/settings", Component: BoardSettings },
-      { path: "board/:id/concepts", Component: AllConcepts },
-      { path: "board/:id/tags", Component: AllTags },
-      { path: "board/:id/sessions", Component: Sessions },
-      { path: "board/:id/sessions/play", Component: SessionPlay },
-      { path: "board/:id/sessions/:sessionId", Component: SessionDetail },
-      { path: "board/:id/logs", Component: Logs },
-      { path: "board/:id/concept/:conceptId", Component: ConceptDetail },
+      { path: "/", Component: Landing },
+      {
+        path: "/app",
+        Component: Root,
+        children: [
+          { index: true, Component: Dashboard },
+          { path: "settings", Component: UserSettings },
+          { path: "profile", Component: Profile },
+          { path: "board/new", Component: NewBoard },
+          { path: "board/:id", Component: BoardDetail },
+          { path: "board/:id/settings", Component: BoardSettings },
+          { path: "board/:id/concepts", Component: AllConcepts },
+          { path: "board/:id/tags", Component: AllTags },
+          { path: "board/:id/sessions", Component: Sessions },
+          { path: "board/:id/sessions/play", Component: SessionPlay },
+          { path: "board/:id/sessions/:sessionId", Component: SessionDetail },
+          { path: "board/:id/logs", Component: Logs },
+          { path: "board/:id/concept/:conceptId", Component: ConceptDetail },
+        ],
+      },
+      { path: "/login", Component: Login },
+      { path: "/signup", Component: Signup },
+      { path: "/verify", Component: Verify },
+      { path: "/forgot-password", Component: ForgotPassword },
+      { path: "/reset-password", Component: ResetPassword },
     ],
   },
-  { path: "/login", Component: Login },
-  { path: "/signup", Component: Signup },
-  { path: "/verify", Component: Verify },
-  { path: "/forgot-password", Component: ForgotPassword },
-  { path: "/reset-password", Component: ResetPassword },
 ]);

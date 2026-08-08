@@ -4,10 +4,14 @@ import { motion } from "motion/react";
 import { FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useLogs } from "../context/LogContext";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import { LogModal } from "../components/LogModal";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { BackButton } from "../components/BackButton";
 import type { Log } from "../types";
+
+/** How many log rows are rendered before the scroll sentinel appends more. */
+const DISPLAY_PAGE_SIZE = 15;
 
 /** Compact "Aug 4 · 7:05 PM" style timestamp from an ISO string. */
 function formatStamp(iso: string): string {
@@ -39,6 +43,9 @@ export function Logs() {
   const board = boards.find((b) => b.id === id);
   const boardLogs = id ? logs[id] ?? [] : [];
   const isLoading = loadedFor !== id;
+  // Only the slice that fits the viewport is rendered; the rest stay in
+  // memory until the sentinel pulls them in as the user scrolls.
+  const { visible, hasMore, sentinelRef } = useIncrementalList(boardLogs, DISPLAY_PAGE_SIZE, id ?? undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -145,10 +152,16 @@ export function Logs() {
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
           <p className="text-sm">{loadError}</p>
           <button
-            onClick={() => {
+            onClick={async () => {
               setLoadError(null);
               setLoadedFor(null);
-              loadLogs(id!);
+              try {
+                await loadLogs(id!);
+                setLoadedFor(id!);
+              } catch (err) {
+                setLoadError(err instanceof Error ? err.message : "Failed to load logs");
+                setLoadedFor(id!);
+              }
             }}
             className="text-primary text-sm hover:underline"
           >
@@ -164,39 +177,48 @@ export function Logs() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {boardLogs.map((log, i) => (
-            <motion.div
-              key={log.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22, delay: i * 0.04 }}
-              className="group bg-card border border-border rounded-xl px-5 py-4 flex flex-col gap-2 hover:border-primary/30 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-foreground leading-snug flex-1">{log.title}</h3>
-                <button
-                  onClick={() => openEdit(log)}
-                  title="Edit log"
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              {log.body && (
-                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{log.body}</p>
-              )}
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-[11px] text-muted-foreground font-mono">{formatStamp(log.createdAt)}</span>
-                {log.updatedAt !== log.createdAt && (
-                  <span className="text-[11px] text-muted-foreground font-mono">
-                    · edited {formatStamp(log.updatedAt)}
-                  </span>
+        <>
+          <div className="flex flex-col gap-3">
+            {visible.map((log, i) => (
+              <motion.div
+                key={log.id}
+                // Rows animate in on mount, but sentinel-appended rows get a
+                // fast, delay-free transition so the list never leaves a
+                // blank region you can scroll into while they appear.
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.04 }}
+                className="group bg-card border border-border rounded-xl px-5 py-4 flex flex-col gap-2 hover:border-primary/30 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-foreground leading-snug flex-1">{log.title}</h3>
+                  <button
+                    onClick={() => openEdit(log)}
+                    title="Edit log"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {log.body && (
+                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{log.body}</p>
                 )}
-              </div>
-            </motion.div>
-          ))}
-        </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[11px] text-muted-foreground font-mono">{formatStamp(log.createdAt)}</span>
+                  {log.updatedAt !== log.createdAt && (
+                    <span className="text-[11px] text-muted-foreground font-mono">
+                      · edited {formatStamp(log.updatedAt)}
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          {/* Sentinel for scroll-driven rendering: the useIncrementalList hook
+              watches this element and appends the next slice of logs once it
+              reaches the viewport. */}
+          {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
+        </>
       )}
 
       <LogModal
