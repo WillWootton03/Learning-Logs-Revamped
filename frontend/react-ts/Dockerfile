@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Frontend image — Learning Logs UI (React + Vite).
 #
 # Dev-focused for now (matches the current dev/test compose stacks): runs the
@@ -13,8 +14,10 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install dependencies first so source changes don't re-trigger npm install.
+# npm ci is faster and deterministic (installs the lockfile, no re-resolution);
+# the cache mount keeps the package download cache across rebuilds.
 COPY package.json package-lock.json ./
-RUN npm install --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Bundle the app source (node_modules excluded via .dockerignore).
 COPY . .

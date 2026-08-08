@@ -151,19 +151,19 @@ export function BoardDetail() {
 
         {/* concepts list */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-x-3 md:justify-between">
             <h2 className="text-foreground">Concepts</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCsvOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
               >
                 <Upload className="w-3.5 h-3.5" />
                 Upload CSV
               </button>
               <button
                 onClick={() => setAddConceptOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/15 text-primary border border-primary/25 text-xs hover:bg-primary/25 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add concept

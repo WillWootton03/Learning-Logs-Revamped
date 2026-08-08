@@ -293,11 +293,11 @@ export function BoardSettings() {
         {/* concepts tab */}
         {tab === "concepts" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">{boardConcepts.length} concept{boardConcepts.length !== 1 ? "s" : ""}</p>
               <button
                 onClick={() => setAddConceptOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors self-start"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add concept
@@ -411,7 +411,7 @@ export function BoardSettings() {
         {/* tags tab */}
         {tab === "tags" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">{allTags.length} tag{allTags.length !== 1 ? "s" : ""}</p>
               {addingNewTag ? (
                 <div className="flex items-center gap-2">
@@ -442,7 +442,7 @@ export function BoardSettings() {
               ) : (
                 <button
                   onClick={() => setAddingNewTag(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors self-start"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Add tag
@@ -520,11 +520,11 @@ export function BoardSettings() {
         {/* logs tab */}
         {tab === "logs" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">{boardLogs.length} log{boardLogs.length !== 1 ? "s" : ""}</p>
               <button
                 onClick={() => { setEditingLog(null); setLogModalOpen(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors self-start"
               >
                 <Plus className="w-3.5 h-3.5" />
                 New log

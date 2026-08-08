@@ -128,7 +128,8 @@ export function AllConcepts() {
     <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
       <div className="flex flex-col gap-4">
         <BackButton to={`/app/board/${id}`} label={board.title} />
-        <div className="flex items-end justify-between gap-4">
+        {/* Header row: title + primary actions */}
+        <div className="flex md:flex-row flex-col items-start md:items-end justify-between gap-4">
           <div>
             <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
             <h1 className="text-foreground">All Concepts</h1>
@@ -137,7 +138,7 @@ export function AllConcepts() {
             {all.length > 0 && (
               <button
                 onClick={() => setDeleteOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
+                className="flex items-center gap-1 md:gap-3.5 px-1.5 md:px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Delete all
@@ -145,14 +146,14 @@ export function AllConcepts() {
             )}
             <button
               onClick={() => setCsvOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+              className="flex items-center gap-1 px-1.5 md:px-3.5 md:gap-3.5 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
             >
               <Upload className="w-3.5 h-3.5" />
               Upload CSV
             </button>
             <button
               onClick={() => setAddConceptOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+              className="flex items-center gap-1 px-1.5 md:px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               Add concept
@@ -161,7 +162,7 @@ export function AllConcepts() {
         </div>
       </div>
 
-      {/* filters */}
+      {/* filters row */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
           <div className="flex items-center gap-1 bg-secondary rounded-lg p-1">
@@ -187,14 +188,16 @@ export function AllConcepts() {
             </button>
           ))}
         </div>
-        <div className="relative flex-shrink-0">
+        {/* Stretch the search bar across the full row so it lines up with the
+            list below instead of floating in a fixed corner box. */}
+        <div className="relative w-full sm:w-72 sm:shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search concepts…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-4 py-2 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-52 transition-all"
+            className="pl-9 pr-4 py-2 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-full transition-all"
           />
         </div>
       </div>

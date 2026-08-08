@@ -123,24 +123,26 @@ export function Logs() {
             <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono mb-1">{board.subject}</p>
             <h1 className="text-foreground">Logs</h1>
           </div>
-          <div className="flex items-center gap-2">
-            {boardLogs.length > 0 && (
-              <button
-                onClick={() => setDeleteOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete all
-              </button>
-            )}
+        </div>
+        {/* action row — its own line beneath the header so the buttons never
+            crowd the title */}
+        <div className="flex items-center gap-2">
+          {boardLogs.length > 0 && (
             <button
-              onClick={openNew}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+              onClick={() => setDeleteOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-rose-500/25 text-sm text-rose-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" />
-              New log
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete all
             </button>
-          </div>
+          )}
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary/15 text-primary border border-primary/25 text-sm hover:bg-primary/25 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New log
+          </button>
         </div>
       </div>
 

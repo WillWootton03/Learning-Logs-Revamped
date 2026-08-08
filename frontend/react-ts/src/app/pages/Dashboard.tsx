@@ -155,14 +155,16 @@ export function Dashboard() {
             </button>
           ))}
         </div>
-        <div className="relative">
+        {/* Full width on mobile so the search aligns with the summary cards
+            above it; fixed width again from sm up. */}
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search boards…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-4 py-2 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-52 transition-all"
+            className="pl-9 pr-4 py-2 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-full sm:w-52 transition-all"
             style={{ fontFamily: "var(--font-sans)" }}
           />
         </div>

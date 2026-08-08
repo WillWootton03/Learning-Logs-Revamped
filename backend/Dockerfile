@@ -22,7 +22,7 @@ COPY package.json package-lock.json ./
 # --- Dev: the hot-reloaded API server. Production deps only — the dev stack
 # runs `node --watch` (a Node built-in), which needs no devDependencies. ---
 FROM base AS dev
-RUN npm ci --omit=dev --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 COPY . .
 EXPOSE 3000
 CMD ["node", "--watch", "bin/www"]
@@ -31,13 +31,13 @@ CMD ["node", "--watch", "bin/www"]
 # The command chains the unit suite with the integration suite. ---
 FROM base AS test
 ENV NODE_ENV=test
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 COPY . .
 CMD ["sh", "-c", "npm test && npm run test:integration"]
 
 # --- Production: lean API server — no watch mode, prod deps only. ---
 FROM base AS prod
-RUN npm ci --omit=dev --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 COPY . .
 EXPOSE 3000
 # Runs `node bin/www` (no --watch). NODE_ENV is intentionally left to the

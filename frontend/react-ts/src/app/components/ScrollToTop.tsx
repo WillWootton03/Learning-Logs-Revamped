@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useLocation } from "react-router";
 
 /**
@@ -6,11 +6,16 @@ import { useLocation } from "react-router";
  * Mounted in a layout route that wraps every page, so navigating between
  * boards / concepts / settings always lands at the top instead of keeping
  * the previous page's scroll depth.
+ *
+ * Must run before paint (useLayoutEffect): navigating from a scrolled page
+ * (e.g. clicking "Sign up" lower down on the landing page) otherwise paints
+ * the new page at the old scroll offset first — the centered card appears
+ * lower on screen and then jumps up, which reads as a display-time jitter.
  */
 export function ScrollToTop() {
   const { pathname } = useLocation();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
 
