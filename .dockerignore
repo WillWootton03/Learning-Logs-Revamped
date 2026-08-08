@@ -1,0 +1,16 @@
+# Root .dockerignore — applies ONLY to builds whose context is the repo root,
+# i.e. the production frontend image (Dockerfile.prod). The backend and dev
+# frontend images build from their own directories and use their own
+# .dockerignore files, so this file never affects them.
+#
+# Never ship host node_modules (Windows/macOS binaries would break the
+# Linux-native install in the image), build output, or env files with secrets.
+
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+**/*.local
+*.log
+.git

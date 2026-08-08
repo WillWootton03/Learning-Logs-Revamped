@@ -34,3 +34,13 @@ ENV NODE_ENV=test
 RUN npm ci --no-audit --no-fund
 COPY . .
 CMD ["sh", "-c", "npm test && npm run test:integration"]
+
+# --- Production: lean API server — no watch mode, prod deps only. ---
+FROM base AS prod
+RUN npm ci --omit=dev --no-audit --no-fund
+COPY . .
+EXPOSE 3000
+# Runs `node bin/www` (no --watch). NODE_ENV is intentionally left to the
+# environment: production deployments behind TLS should set it so auth cookies
+# get the Secure flag.
+CMD ["node", "bin/www"]

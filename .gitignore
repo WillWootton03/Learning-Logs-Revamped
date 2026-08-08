@@ -1,0 +1,3 @@
+# Never commit the nginx origin certificate (private key) or any local env
+# files with secrets. Both services have their own .gitignore for the rest.
+nginx/certs/

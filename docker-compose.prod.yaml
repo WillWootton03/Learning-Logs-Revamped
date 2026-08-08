@@ -1,0 +1,94 @@
+# Learning Logs — production stack.
+#
+# Everything sits behind one nginx router, one origin:
+#   frontend → nginx serves the built React SPA and proxies /auth, /users,
+#              /boards to the backend service
+#   backend  → Express API (production Dockerfile target: no watch mode)
+#
+# Because the browser only ever talks to nginx, the httpOnly JWT auth cookies
+# are same-site and CORS is out of the picture.
+#
+#   http://localhost:8080     → plain-HTTP local testing
+#   http://localhost/         → localhost via port 80 (redirected for the
+#                               domain host, served directly for localhost)
+#   https://learning-logs.com → the real site; Cloudflare terminates the
+#                               browser connection and talks to nginx on :443
+#
+# TLS: nginx serves HTTPS on :443 using a Cloudflare Origin Certificate. That
+# cert is generated in the Cloudflare dashboard (SSL/TLS → Origin Server →
+# Create Certificate) and saved as two files:
+#   nginx/certs/learning-logs.pem  (the certificate, INCLUDING the chain)
+#   nginx/certs/learning-logs.key  (the private key)
+# Both files are bind-mounted read-only into nginx and must NOT be committed.
+# A placeholder self-signed pair is generated for local verification — replace
+# it with the real files (same names) and restart the frontend service before
+# switching Cloudflare's SSL/TLS mode to "Full (strict)".
+#
+# Run:
+#   docker compose -f docker-compose.prod.yaml up -d --build
+#
+# Production image names are suffixed (-prod) so this stack can coexist with
+# the dev stack without image-tag collisions.
+
+name: learninglogs-prod
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    image: learninglogs-backend-prod
+    env_file:
+      - ./backend/.env
+    # Production: makes the auth JWT cookies carry the Secure flag, which the
+    # browser requires before storing them over the HTTPS connection Cloudflare
+    # provides to visitors.
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/react-ts/Dockerfile.prod
+    image: learninglogs-frontend-prod
+    ports:
+      # 80/443 are what Cloudflare connects to (it only uses those two).
+      # 8080 maps to the localhost block for cert-free local testing.
+      - "80:80"
+      - "443:443"
+      - "8080:80"
+    volumes:
+      # Origin certificate pair, dropped in by hand and read live (no rebuild
+      # needed to swap certs — just replace the files and restart frontend).
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# ---------------------------------------------------------------------------
+# Shell commands — run these from the repo root.
+# ---------------------------------------------------------------------------
+# Generate placeholder certs for local verification (only needed once, before
+# the first HTTPS start):
+#   docker run --rm -v "${PWD}/nginx/certs:/certs" alpine/openssl req -x509 -newkey rsa:2048 -nodes -keyout /certs/learning-logs.key -out /certs/learning-logs.pem -days 3650 -subj "/CN=learning-logs.com"
+#
+# Build + start the production stack in the background (nginx on :80/:443,
+# local testing on :8080):
+#   docker compose -f docker-compose.prod.yaml up -d --build
+#
+# Follow the logs from both services:
+#   docker compose -f docker-compose.prod.yaml logs -f
+#
+# Rebuild just the frontend image after a source change:
+#   docker compose -f docker-compose.prod.yaml build frontend
+#
+# Swap in the real Cloudflare Origin Certificate (replace the two files in
+# nginx/certs/, then restart nginx to pick them up):
+#   docker compose -f docker-compose.prod.yaml restart frontend
+#
+# Stop the stack (keeps images + volumes for a fast restart):
+#   docker compose -f docker-compose.prod.yaml stop
+#
+# Fully tear down — removes containers, network, and anonymous volumes:
+#   docker compose -f docker-compose.prod.yaml down

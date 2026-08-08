@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Frontend production image — builds the React SPA, then serves it through
+# nginx, which also reverse-proxies API traffic to the backend service so the
+# whole app shares one origin (no CORS, same-site httpOnly auth cookies).
+#
+# This file expects the REPO ROOT as its build context so it can reach
+# nginx/nginx.conf. docker-compose.prod.yaml sets this for you:
+#   build: { context: ., dockerfile: frontend/react-ts/Dockerfile.prod }
+#
+# Build + run:
+#   docker compose -f docker-compose.prod.yaml up --build
+#   → http://localhost:8080
+
+FROM node:22-alpine AS build
+
+WORKDIR /app
+
+# Dependency metadata first so source edits don't re-run npm install.
+COPY frontend/react-ts/package.json frontend/react-ts/package-lock.json ./
+RUN npm install --no-audit --no-fund
+
+COPY frontend/react-ts/ .
+
+# VITE_API_URL is inlined into the bundle at build time. Keep it empty (the
+# default) so the app calls the SAME origin — nginx routes API paths to the
+# backend. Set an absolute URL only if the API lives somewhere else entirely.
+ARG VITE_API_URL=
+ENV VITE_API_URL=$VITE_API_URL
+RUN npm run build
+
+# ── Runtime: nginx serves the SPA and proxies /auth, /users, /boards. ──
+FROM nginx:1.27-alpine
+
+COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx/locations.conf /etc/nginx/locations.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+# The stock nginx image CMD (nginx -g daemon off;) is used as-is.
