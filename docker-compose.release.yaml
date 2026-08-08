@@ -18,7 +18,7 @@ name: learninglogs-prod
 
 services:
   backend:
-    image: ghcr.io/${GHCR_OWNER:-learning-logs}/learning-logs-backend:${APP_VERSION:-latest}
+    image: ghcr.io/${GHCR_OWNER:-willwootton03}/learning-logs-backend:${APP_VERSION:-latest}
     env_file:
       - ./backend/.env
     environment:
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/${GHCR_OWNER:-learning-logs}/learning-logs-frontend:${APP_VERSION:-latest}
+    image: ghcr.io/${GHCR_OWNER:-willwootton03}/learning-logs-frontend:${APP_VERSION:-latest}
     ports:
       - "80:80"
       - "443:443"
