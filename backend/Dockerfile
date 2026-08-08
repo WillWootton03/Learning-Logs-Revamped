@@ -40,7 +40,7 @@ FROM base AS prod
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 COPY . .
 EXPOSE 3000
-# Runs `node bin/www` (no --watch). NODE_ENV is intentionally left to the
-# environment: production deployments behind TLS should set it so auth cookies
-# get the Secure flag.
-CMD ["node", "bin/www"]
+# Apply the schema (idempotent, IF NOT EXISTS) on every start so a fresh
+# deployment against Neon provisions its tables automatically, then boot the
+# API. Runs as the admin role via DATABASE_ADMIN_URL in the environment.
+CMD ["sh", "-c", "npm run db:setup && node bin/www"]
