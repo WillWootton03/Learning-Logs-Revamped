@@ -5,8 +5,6 @@ name: Release
 #      nginx image) and pushes them to GitHub Container Registry.
 #   2. Deploys to the EC2 server over SSH — pulls the tagged images and
 #      restarts the compose stack.
-#
-# The deploy job is skipped until the EC2_* secrets are set in the repo.
 
 on:
   push:
@@ -88,13 +86,6 @@ jobs:
     name: Deploy to EC2
     needs: build-and-push
     runs-on: ubuntu-latest
-    # The `secrets` context isn't available in `if:` conditions, so the host is
-    # copied into a job-level env var first and checked against that. This
-    # skips the job entirely until EC2_* secrets are configured in the repo.
-    env:
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-    if: env.EC2_HOST != ''
-
     steps:
       - uses: appleboy/ssh-action@v1.2.0
         with:
