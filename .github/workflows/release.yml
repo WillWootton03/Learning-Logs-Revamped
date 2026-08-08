@@ -2,9 +2,15 @@ name: Release
 
 # Cut a release by pushing a version tag (v1.2.3), or trigger one manually:
 #   1. Builds the production Docker images (backend prod target, frontend
-#      nginx image) and pushes them to GitHub Container Registry.
-#   2. Deploys to the EC2 server over SSH — pulls the tagged images and
-#      restarts the compose stack.
+#      nginx image) on a GitHub-hosted runner and pushes them to GHCR.
+#   2. Deploys to the EC2 server using a self-hosted runner INSTALLED ON THE
+#      SERVER — no inbound SSH needed for CI. The runner dials out to GitHub
+#      and the deploy job runs its commands locally on the box.
+#
+# Set up the self-hosted runner once on EC2:
+#   repo Settings → Actions → Runners → "New self-hosted runner" (linux),
+#   then run the configure + ./run.sh steps it gives you, installed as a
+#   service (./svc.sh install && ./svc.sh start).
 
 on:
   push:
@@ -83,23 +89,22 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/learning-logs-frontend:latest
 
   deploy:
-    name: Deploy to EC2
+    name: Deploy to EC2 (self-hosted runner)
     needs: build-and-push
-    runs-on: ubuntu-latest
+    # Runs ON the EC2 instance itself. The runner was registered for this repo
+    # under Settings → Actions → Runners, so no inbound SSH is required — the
+    # runner's own process talks outbound to GitHub and executes these
+    # commands locally on the server.
+    runs-on: self-hosted
     steps:
-      - uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          # EC2_APP_DIR points at the cloned repo (default ~/learninglogs).
-          script: |
-            set -e
-            APP_DIR="${{ secrets.EC2_APP_DIR || '$HOME/learninglogs' }}"
-            cd "$APP_DIR"
-            git pull --ff-only
-            export GHCR_OWNER="${{ needs.build-and-push.outputs.owner }}"
-            export APP_VERSION="${{ needs.build-and-push.outputs.tag }}"
-            docker compose -f docker-compose.release.yaml pull
-            docker compose -f docker-compose.release.yaml up -d
-            docker image prune -f
+      - name: Deploy latest images
+        run: |
+          set -e
+          APP_DIR="/home/ubuntu/learninglogs"
+          cd "$APP_DIR"
+          git pull --ff-only
+          export GHCR_OWNER="${{ needs.build-and-push.outputs.owner }}"
+          export APP_VERSION="${{ needs.build-and-push.outputs.tag }}"
+          docker compose -f docker-compose.release.yaml pull
+          docker compose -f docker-compose.release.yaml up -d
+          docker image prune -f
