@@ -1,0 +1,110 @@
+name: Release
+
+# Cut a release by pushing a version tag (v1.2.3), or trigger one manually:
+#   1. Builds the production Docker images (backend prod target, frontend
+#      nginx image) and pushes them to GitHub Container Registry.
+#   2. Deploys to the EC2 server over SSH — pulls the tagged images and
+#      restarts the compose stack.
+#
+# The deploy job is skipped until the EC2_* secrets are set in the repo.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    name: Build & push images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      owner: ${{ steps.owner.outputs.owner }}
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR image names must be lowercase; derive the owner from the repo.
+      - name: Resolve image owner
+        id: owner
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # Use the pushed tag as the image tag; fall back to the short SHA for
+      # manual runs.
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.ref_type }}" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          target: prod
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/learning-logs-backend:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/learning-logs-backend:latest
+
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          # Dockerfile.prod expects the repo root as its build context (it
+          # copies nginx/nginx.conf + locations.conf from the root).
+          context: .
+          file: ./frontend/react-ts/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/learning-logs-frontend:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/learning-logs-frontend:latest
+
+  deploy:
+    name: Deploy to EC2
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Skip until the deployment secrets are configured.
+    if: secrets.EC2_HOST != ''
+
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          # EC2_APP_DIR points at the cloned repo (default ~/learninglogs).
+          script: |
+            set -e
+            APP_DIR="${{ secrets.EC2_APP_DIR || '$HOME/learninglogs' }}"
+            cd "$APP_DIR"
+            git pull --ff-only
+            export GHCR_OWNER="${{ needs.build-and-push.outputs.owner }}"
+            export APP_VERSION="${{ needs.build-and-push.outputs.tag }}"
+            docker compose -f docker-compose.release.yaml pull
+            docker compose -f docker-compose.release.yaml up -d
+            docker image prune -f

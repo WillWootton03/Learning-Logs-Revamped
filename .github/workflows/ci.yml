@@ -1,0 +1,100 @@
+name: CI
+
+# Run the full test suite on every pull request and on every merge/push to
+# master (the default branch). Failing a check on a PR blocks the merge;
+# failing on master flags a regression immediately.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  # Cancel a superseded run: only the latest workflow for a given ref runs.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (unit + integration)
+    runs-on: ubuntu-latest
+
+    # A real PostgreSQL for the integration suite. The tests provision the
+    # restricted `learninglogs_app` role and schema themselves (db:role +
+    # globalSetup), so the service just needs a clean database the admin
+    # connection can bootstrap.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: learninglogs_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d learninglogs_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # db:role creates `learninglogs_app` (RLS enforcement role), grants the
+      # needed privileges, and rewrites backend/.env so DATABASE_URL /
+      # TEST_DATABASE_URL use the restricted role while the *_ADMIN_URL keys
+      # keep the owner connection the tests need for schema + truncation.
+      # Env is set only on this step (not job-level) so the Jest setup reads
+      # the rewritten .env and runs as the app role, exercising RLS.
+      - name: Provision database role + .env
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/learninglogs_test
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/learninglogs_test
+        run: npm run db:role
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests
+        run: npm run test:integration
+
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend/react-ts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/react-ts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      # `npm run build` runs `tsc -b` first, so this doubles as the typecheck.
+      - name: Build
+        run: npm run build

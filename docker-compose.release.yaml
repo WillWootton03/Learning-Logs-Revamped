@@ -1,0 +1,37 @@
+# Learning Logs — release deployment stack (used on the EC2 server).
+#
+# Identical to docker-compose.prod.yaml except images come from GitHub
+# Container Registry (built + pushed by .github/workflows/release.yml) instead
+# of being built on the server. The server just pulls the tagged images and
+# restarts — the deploy job sets GHCR_OWNER and APP_VERSION.
+#
+# Run on the server:
+#   docker compose -f docker-compose.release.yaml pull
+#   docker compose -f docker-compose.release.yaml up -d
+#
+# Prereqs on the server (set up once):
+#   - the repo cloned (deploy job does git pull)
+#   - backend/.env with real secrets
+#   - nginx/certs/learning-logs.pem + .key (Cloudflare origin cert)
+
+name: learninglogs-prod
+
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER:-learning-logs}/learning-logs-backend:${APP_VERSION:-latest}
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER:-learning-logs}/learning-logs-frontend:${APP_VERSION:-latest}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
