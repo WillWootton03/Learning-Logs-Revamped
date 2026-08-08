@@ -17,6 +17,8 @@ type Props = {
   boardId: string;
   open: boolean;
   onClose: () => void;
+  /** Called after a successful import so the host page can refresh its data. */
+  onImported?: () => void | Promise<void>;
 };
 
 /** Words that mark a CSV line as a header/naming row instead of concept data. */
@@ -110,7 +112,7 @@ function parseCSV(text: string): ParsedRow[] {
  * client for a preview (valid/error rows), then sends the rows to the backend
  * import endpoint, which batch-creates tags, then concepts, then the links.
  */
-export function CSVUploadModal({ boardId, open, onClose }: Props) {
+export function CSVUploadModal({ boardId, open, onClose, onImported }: Props) {
   useScrollLock(open);
   const { importConcepts } = useConcepts();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -156,6 +158,7 @@ export function CSVUploadModal({ boardId, open, onClose }: Props) {
       // The context appends the created concepts to local state, so the board
       // page updates immediately without a refetch.
       await importConcepts(boardId, payload);
+      await onImported?.();
       reset();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");

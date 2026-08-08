@@ -13,6 +13,7 @@
 #   - the repo cloned (deploy job does git pull)
 #   - backend/.env with real secrets
 #   - nginx/certs/learning-logs.pem + .key (Cloudflare origin cert)
+#   - datadog.env with API key
 
 name: learninglogs-prod
 
@@ -23,6 +24,51 @@ services:
       - ./backend/.env
     environment:
       NODE_ENV: production
+      # APM tracer talks to the Datadog Agent over a unix socket shared through
+      # the /opt/datadog-agent/run volume — no agent port exposed on the network.
+      DD_TRACE_AGENT_URL: unix:///var/run/datadog/apm.socket
+      # Tag traces/logs with environment + service so the Logs Explorer and APM
+      # correlate correctly (and log lines show env:production).
+      DD_ENV: production
+      DD_SERVICE: backend
+    volumes:
+      - /opt/datadog-agent/run:/var/run/datadog:rw
+    restart: unless-stopped
+
+  # Datadog Agent — collects every container's stdout/stderr as logs and
+  # receives APM traces from the backend over the shared unix socket.
+  #
+  # One-time secret setup on the server (never committed): create datadog.env
+  # at the repo root with your API key from Datadog → Organization Settings →
+  # API Keys:
+  #   DD_API_KEY=<your key>
+  # Restart the stack once the file exists. Logs and traces then appear in
+  # Datadog tagged by container and host within a minute or two.
+  datadog:
+    image: gcr.io/datadoghq/agent:7
+    env_file:
+      - ./datadog.env
+    environment:
+      DD_SITE: datadoghq.com
+      # APM — enable the trace agent and receive traces over the unix socket
+      # the backend mounts at the same path.
+      DD_APM_ENABLED: "true"
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      DD_APM_RECEIVER_SOCKET: /opt/datadog-agent/run/apm.socket
+      DD_DOGSTATSD_SOCKET: /opt/datadog-agent/run/dsd.socket
+      # Logs — pick up stdout/stderr from every container automatically.
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+      # APM + Logs only; disable process collection to keep the footprint small
+      # on the t3.micro.
+      DD_PROCESS_AGENT_ENABLED: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
+    pid: host
     restart: unless-stopped
 
   frontend:
