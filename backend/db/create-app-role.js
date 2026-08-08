@@ -93,7 +93,13 @@ async function ensureRole(db, password) {
 
 /** Insert or replace a KEY=VALUE line in .env, appending missing keys. */
 function updateEnvFile(envPath, updates) {
-  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  let lines = [];
+  try {
+    lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    // No .env exists yet (fresh clone or CI runner): start from scratch.
+  }
   for (const [key, value] of Object.entries(updates)) {
     const re = new RegExp(`^${key}=`);
     const index = lines.findIndex((line) => re.test(line));
