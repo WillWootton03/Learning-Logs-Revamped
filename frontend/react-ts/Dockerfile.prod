@@ -16,8 +16,12 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 # Dependency metadata first so source edits don't re-run npm install.
+# npm ci installs exactly what the lockfile pins — no dependency re-resolution,
+# so it's dramatically faster and deterministic than npm install. The npm cache
+# mount keeps downloaded packages across rebuilds, so source changes (which
+# bust the layer cache but not the lockfile) don't re-download the world.
 COPY frontend/react-ts/package.json frontend/react-ts/package-lock.json ./
-RUN npm install --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 COPY frontend/react-ts/ .
 

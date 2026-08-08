@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useNavigate, useLocation, useMatch } from "react-router";
 import {
   GraduationCap, Plus, Settings, LogOut, User,
-  ChevronDown, BookOpen, Tag, Clock, FileText, ChevronRight, SlidersHorizontal,
+  ChevronDown, BookOpen, Tag, Clock, FileText, ChevronRight, SlidersHorizontal, Menu,
 } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { useAuth } from "../context/AuthContext";
@@ -11,7 +11,9 @@ import { displayName, initials } from "../lib/userName";
 
 export function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const boardMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,8 +33,12 @@ export function Navbar() {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
         setUserMenuOpen(false);
+      }
+      if (boardMenuRef.current && !boardMenuRef.current.contains(target)) {
+        setBoardMenuOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -72,9 +78,10 @@ export function Navbar() {
           )}
         </div>
 
-        {/* board-specific nav links */}
+        {/* board-specific nav links — inline from md up; on mobile they live in
+            the board dropdown next to the user menu */}
         {isOnBoard && !isAuth && (
-          <nav className="flex items-center gap-1 overflow-x-auto">
+          <nav className="hidden md:flex items-center gap-1">
             <button onClick={() => navigate(`/app/board/${boardId}/concepts`)} className={navLinkClass(`/app/board/${boardId}/concepts`)}>
               <BookOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:block">Concepts</span>
@@ -104,9 +111,49 @@ export function Navbar() {
           </button>
         ) : (
           <div className="flex items-center gap-3 ml-auto flex-shrink-0">
+            {/* Mobile board nav dropdown — replaces the New Board button on
+                small screens when inside a board, so the board's sub-pages
+                stay one tap away without a horizontally scrolling nav. */}
+            {isOnBoard && (
+              <div className="relative md:hidden" ref={boardMenuRef}>
+                <button
+                  onClick={() => setBoardMenuOpen((v) => !v)}
+                  aria-label="Board menu"
+                  className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors ${boardMenuOpen ? "bg-secondary" : "hover:bg-secondary/60"}`}
+                >
+                  <Menu className="w-4 h-4" />
+                </button>
+
+                <AnimatePresence>
+                  {boardMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="absolute -right-20 top-[calc(100%+8px)] w-48 bg-card border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50"
+                    >
+                      <div className="px-4 py-2.5 border-b border-border truncate">
+                        <p className="text-sm text-foreground truncate">{currentBoard?.title}</p>
+                      </div>
+                      <div className="py-1.5">
+                        <DropdownItem icon={<BookOpen className="w-3.5 h-3.5" />} label="Concepts" onClick={() => { setBoardMenuOpen(false); navigate(`/app/board/${boardId}/concepts`); }} />
+                        <DropdownItem icon={<Tag className="w-3.5 h-3.5" />} label="Tags" onClick={() => { setBoardMenuOpen(false); navigate(`/app/board/${boardId}/tags`); }} />
+                        <DropdownItem icon={<Clock className="w-3.5 h-3.5" />} label="Sessions" onClick={() => { setBoardMenuOpen(false); navigate(`/app/board/${boardId}/sessions`); }} />
+                        <DropdownItem icon={<FileText className="w-3.5 h-3.5" />} label="Logs" onClick={() => { setBoardMenuOpen(false); navigate(`/app/board/${boardId}/logs`); }} />
+                        <DropdownItem icon={<SlidersHorizontal className="w-3.5 h-3.5" />} label="Settings" onClick={() => { setBoardMenuOpen(false); navigate(`/app/board/${boardId}/settings`); }} />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Inside a board the mobile dropdown takes over, so the New Board
+                button stays desktop-only there. */}
             <button
               onClick={() => navigate("/app/board/new")}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors ${isOnBoard ? "hidden sm:flex" : ""}`}
             >
               <Plus className="w-3.5 h-3.5" />
               <span className="hidden sm:block">New Board</span>

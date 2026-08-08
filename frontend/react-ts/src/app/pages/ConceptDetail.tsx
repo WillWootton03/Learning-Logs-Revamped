@@ -446,7 +446,7 @@ export function ConceptDetail() {
 
   return (
     <>
-      <main className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-8">
+      <main className="max-w-3xl mx-auto px-4 sm:px-8 py-10 flex flex-col gap-8">
         {/* back to the concepts list */}
         <BackButton to={`/app/board/${id}/concepts`} label="Concepts" />
 
@@ -457,7 +457,9 @@ export function ConceptDetail() {
           transition={{ duration: 0.35 }}
           className="flex flex-col gap-4"
         >
-          <div className="flex items-start justify-between gap-4">
+          {/* Title + actions stack on mobile so the edit/delete/learned pills
+              get their own row instead of crushing the (often long) prompt. */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div className="flex flex-col gap-2 flex-1 min-w-0">
               <p className="text-xs text-muted-foreground tracking-widest uppercase font-mono">{board.subject}</p>
               {isEditing ? (
@@ -474,7 +476,7 @@ export function ConceptDetail() {
                 <h1 className="text-foreground leading-snug">{concept.title}</h1>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0 mt-1">
+            <div className="flex items-center gap-2 flex-wrap sm:shrink-0 sm:mt-1">
               {!isEditing && (
                 <button
                   onClick={startEditing}
@@ -756,7 +758,7 @@ export function ConceptDetail() {
           className="flex flex-col gap-4"
         >
           <h2 className="text-foreground">Answer</h2>
-          <div className="bg-card border border-border rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
             {isEditing ? (
               <textarea
                 autoFocus
@@ -785,7 +787,7 @@ export function ConceptDetail() {
           className="flex flex-col gap-3"
         >
           <h2 className="text-muted-foreground/80 text-sm tracking-wide uppercase font-mono">Hint</h2>
-          <div className="bg-secondary/30 border border-dashed border-border/60 rounded-xl p-5">
+          <div className="bg-secondary/30 border border-dashed border-border/60 rounded-xl p-4 sm:p-5">
             {isEditing ? (
               <textarea
                 value={draftHint}

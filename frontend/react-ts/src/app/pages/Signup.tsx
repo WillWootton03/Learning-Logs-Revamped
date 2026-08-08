@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router";
 import { motion } from "motion/react";
-import { GraduationCap, Eye, EyeOff } from "lucide-react";
+import { GraduationCap, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { GuestOnly } from "../components/GuestOnly";
 import { validatePassword } from "../lib/password";
@@ -45,7 +45,20 @@ export function Signup() {
 
   return (
     <GuestOnly>
-      <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-sm flex flex-col gap-8"
+      >
+        <button 
+            className="absolute top-4 left-4 p-2 rounded-lg bg-secondary border border-border"
+            onClick={() => navigate("/")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+        </button>
+      </motion.div>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
