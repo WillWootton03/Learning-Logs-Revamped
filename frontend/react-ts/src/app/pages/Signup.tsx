@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { GraduationCap, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { GuestOnly } from "../components/GuestOnly";
+import { SystemTheme } from "../components/SystemTheme";
 import { validatePassword } from "../lib/password";
 
 export function Signup() {
@@ -45,6 +46,7 @@ export function Signup() {
 
   return (
     <GuestOnly>
+      <SystemTheme />
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
       <motion.div
         initial={{ opacity: 0 }}

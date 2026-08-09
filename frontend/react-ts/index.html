@@ -7,12 +7,15 @@
     <title>Learning Logs</title>
     <script>
       // Apply the theme before the bundle loads to avoid a flash of the wrong
-      // scheme. The public landing (/ and /demo) always follow the browser's
-      // color scheme; the app pages use the saved preference (dark fallback).
+      // scheme. The public pages (/, /demo, /login, /signup, /verify,
+      // /forgot-password, /reset-password) always follow the browser's color
+      // scheme; the app pages use the saved preference (dark fallback).
       (function () {
         try {
           var path = window.location.pathname.replace(/\/+$/, "") || "/";
-          var isPublic = path === "/" || path === "/demo";
+          var isPublic =
+            path === "/" || path === "/demo" || path === "/login" || path === "/signup" ||
+            path === "/verify" || path === "/forgot-password" || path === "/reset-password";
           var saved = localStorage.getItem("theme");
           var dark;
           if (isPublic) {

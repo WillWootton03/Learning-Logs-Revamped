@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { motion } from "motion/react";
 import { CheckCircle2, Eye, EyeOff, GraduationCap, KeyRound } from "lucide-react";
 import { GuestOnly } from "../components/GuestOnly";
+import { SystemTheme } from "../components/SystemTheme";
 import { resetPassword } from "../lib/api";
 import { validatePassword } from "../lib/password";
 
@@ -44,6 +45,7 @@ export function ResetPassword() {
 
   return (
     <GuestOnly>
+      <SystemTheme />
       <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}

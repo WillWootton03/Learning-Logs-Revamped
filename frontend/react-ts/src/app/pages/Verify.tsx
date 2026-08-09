@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router";
 import { motion } from "motion/react";
 import { GraduationCap, KeyRound, MailCheck, RefreshCw } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { SystemTheme } from "../components/SystemTheme";
 
 /**
  * Email verification page. Reachable three ways:
@@ -95,7 +96,9 @@ export function Verify() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
+    <>
+      <SystemTheme />
+      <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -210,5 +213,6 @@ export function Verify() {
         </p>
       </motion.div>
     </div>
+    </>
   );
 }
