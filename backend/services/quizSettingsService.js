@@ -64,7 +64,7 @@ async function resolveTagIds(userId, boardId, tagIds) {
  */
 async function list(userId, boardId) {
   const key = cache.boardKey(userId, boardId, 'quizSettings');
-  const cached = await cache.getJSON(key);
+  const cached = await cache.getJSON(key, '/boards/:boardId/quiz-settings');
   if (cached) return cached;
   const settings = await quizSettingsRepository.findAllByBoard(userId, boardId);
   for (const setting of settings) {

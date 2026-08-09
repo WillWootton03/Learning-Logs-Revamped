@@ -1,4 +1,5 @@
 const { Redis } = require('@upstash/redis');
+const { logger } = require('./logger');
 
 /**
  * Server-side read cache backed by Upstash Redis (REST).
@@ -67,14 +68,21 @@ class CacheClient {
 
   /**
    * Read a cached value. Returns null on a miss or any Redis failure.
+   * Logs the lookup for Datadog: a hit/miss line with the route label the
+   * caller attaches, so cache effectiveness can be tracked per endpoint.
    * @param {string} key
+   * @param {string} [route] - API route label, e.g. '/boards/:boardId/concepts'.
    * @returns {Promise<*|null>}
    */
-  async getJSON(key) {
+  async getJSON(key, route) {
     if (!this.redis) return null;
     try {
       const raw = await this.redis.get(key);
-      if (raw === null || raw === undefined) return null;
+      if (raw === null || raw === undefined) {
+        logger.info('Cache lookup', { cache: { status: 'miss', route } });
+        return null;
+      }
+      logger.info('Cache lookup', { cache: { status: 'hit', route } });
       if (typeof raw === 'string') {
         try {
           return JSON.parse(raw);
@@ -84,7 +92,7 @@ class CacheClient {
       }
       return raw;
     } catch (err) {
-      console.error(`[cache] get ${key} failed:`, err.message);
+      logger.error(`[cache] get ${key} failed`, { cache: { status: 'error', route }, error: err.message });
       return null;
     }
   }
@@ -101,7 +109,7 @@ class CacheClient {
     try {
       await this.redis.set(key, JSON.stringify(value), { ex: this.CACHE_TTL_SECONDS });
     } catch (err) {
-      console.error(`[cache] set ${key} failed:`, err.message);
+      logger.error(`[cache] set ${key} failed`, { error: err.message });
     }
   }
 
@@ -115,7 +123,7 @@ class CacheClient {
     try {
       await this.redis.del(...keys);
     } catch (err) {
-      console.error(`[cache] del ${keys.join(', ')} failed:`, err.message);
+      logger.error(`[cache] del ${keys.join(', ')} failed`, { error: err.message });
     }
   }
 
