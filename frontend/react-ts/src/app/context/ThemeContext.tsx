@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 
 type Theme = "dark" | "light";
 
@@ -6,6 +6,12 @@ type ThemeContextType = {
   theme: Theme;
   setTheme: (t: Theme) => void;
   toggle: () => void;
+  /**
+   * Temporarily force the effective theme (e.g. to follow the browser's color
+   * scheme on the public landing/demo pages). Pass null to fall back to the
+   * saved preference.
+   */
+  setOverride: (t: Theme | null) => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
@@ -14,27 +20,34 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     return (localStorage.getItem("theme") as Theme) ?? "dark";
   });
+  const [override, setOverride] = useState<Theme | null>(null);
 
-  useEffect(() => {
+  const effective = override ?? theme;
+
+  // Apply the theme before paint so pages never flash the wrong scheme.
+  useLayoutEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    localStorage.setItem("theme", theme);
-  }, [theme]);
+    root.classList.toggle("dark", effective === "dark");
+  }, [effective]);
 
+  // The saved preference is only written when the user explicitly changes it —
+  // never on mount, so visiting the public pages (which follow the browser
+  // theme) can't pin a theme the user never chose.
   function setTheme(t: Theme) {
     setThemeState(t);
+    localStorage.setItem("theme", t);
   }
 
   function toggle() {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
+    setThemeState((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem("theme", next);
+      return next;
+    });
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggle, setOverride }}>
       {children}
     </ThemeContext.Provider>
   );

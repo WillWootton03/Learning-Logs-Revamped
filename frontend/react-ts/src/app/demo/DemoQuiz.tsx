@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  BookOpen, CheckCircle2, Clock, CornerDownLeft, Flame, Lightbulb, X, XCircle,
+  BookOpen, CheckCircle2, Clock, CornerDownLeft, Flame, Lightbulb, MousePointerClick, X, XCircle,
 } from "lucide-react";
 import { isExactMatch, isLenientMatch, normalize } from "../lib/matching";
 import { QUIZ_STYLE_OPTIONS, quizStyleLabel } from "../lib/quizStyles";
@@ -180,7 +180,7 @@ export function DemoQuiz({
     setIndex((i) => i + 1);
   }
 
-  // Enter-to-skip while a result is shown.
+  // Enter-to-skip (and tap-to-skip on touch devices) while a result is shown.
   const advanceRef = useRef(advance);
   useEffect(() => {
     advanceRef.current = advance;
@@ -204,8 +204,27 @@ export function DemoQuiz({
       }
       advanceRef.current();
     }
+    // On touch devices, a tap anywhere skips the reveal wait and jumps to the
+    // next question, mirroring the Enter shortcut. Taps on interactive
+    // elements are ignored so tapping a button (e.g. quit) doesn't also
+    // advance.
+    function onTouchEnd(e: TouchEvent) {
+      if (quittingRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("button, a, input, textarea, select, [role='button']")) return;
+      e.preventDefault();
+      if (advanceTimer.current) {
+        clearTimeout(advanceTimer.current);
+        advanceTimer.current = null;
+      }
+      advanceRef.current();
+    }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("touchend", onTouchEnd, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
   }, [phase]);
 
   function endEarly() {
@@ -481,9 +500,11 @@ export function DemoQuiz({
               className="flex items-center justify-center gap-2 pt-1 text-muted-foreground"
             >
               <span className="w-6 h-6 rounded-md border border-border flex items-center justify-center">
-                <CornerDownLeft className="w-3.5 h-3.5" />
+                <MousePointerClick className="w-3.5 h-3.5 sm:hidden" />
+                <CornerDownLeft className="w-3.5 h-3.5 hidden sm:block" />
               </span>
-              <span className="text-xs font-mono tracking-wide">Press Enter to continue</span>
+              <span className="text-xs font-mono tracking-wide sm:hidden">Tap to go to next question</span>
+              <span className="text-xs font-mono tracking-wide hidden sm:block">Press Enter to continue</span>
             </motion.div>
           )}
         </motion.div>

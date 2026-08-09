@@ -1,7 +1,8 @@
 import { useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "motion/react";
+import { AnimatePresence, motion, useInView, useMotionValue, useSpring, useTransform } from "motion/react";
 import { useNavigate } from "react-router";
 import { GuestOnly } from "../components/GuestOnly";
+import { SystemTheme } from "../components/SystemTheme";
 import {
   ArrowRight,
   BarChart2,
@@ -378,8 +379,14 @@ function MiniChart() {
 /* ── forgetting curve ─────────────────────────────────────────── */
 
 function ForgettingCurve() {
+  // Observe the wrapping div (a normal HTML element) rather than the SVG paths
+  // themselves — IntersectionObserver on SVG elements is unreliable on mobile,
+  // which left the lines stuck at pathLength 0 (invisible) on phone browsers.
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.3 });
+
   return (
-    <div className="bg-card border border-border rounded-2xl p-6 shadow-xl shadow-black/5 dark:shadow-black/30 flex flex-col gap-5">
+    <div ref={ref} className="bg-card border border-border rounded-2xl p-6 shadow-xl shadow-black/5 dark:shadow-black/30 flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
@@ -395,7 +402,7 @@ function ForgettingCurve() {
       </div>
 
       <div className="relative pt-2">
-        <svg viewBox="0 0 360 190" className="w-full" role="img" aria-label="Forgetting curve with and without review">
+        <svg viewBox="0 0 360 190" className="w-full h-auto" role="img" aria-label="Forgetting curve with and without review">
           {[38, 76, 114, 152].map((y) => (
             <line key={y} x1="20" x2="340" y1={y} y2={y} stroke="var(--border)" strokeDasharray="4 6" />
           ))}
@@ -408,8 +415,7 @@ function ForgettingCurve() {
             strokeWidth="2.5"
             strokeLinecap="round"
             initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
-            viewport={{ once: true }}
+            animate={{ pathLength: inView ? 1 : 0 }}
             transition={{ duration: 1.2, ease: "easeOut" }}
           />
 
@@ -421,8 +427,7 @@ function ForgettingCurve() {
             strokeWidth="3"
             strokeLinecap="round"
             initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
-            viewport={{ once: true }}
+            animate={{ pathLength: inView ? 1 : 0 }}
             transition={{ duration: 1.6, delay: 0.25, ease: "easeOut" }}
           />
 
@@ -433,8 +438,7 @@ function ForgettingCurve() {
             r="3.5"
             fill="color-mix(in srgb, var(--muted-foreground) 45%, transparent)"
             initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
+            animate={{ opacity: inView ? 1 : 0 }}
             transition={{ delay: 1.2 }}
           />
           <motion.circle
@@ -443,8 +447,7 @@ function ForgettingCurve() {
             r="3.5"
             fill="var(--primary)"
             initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
+            animate={{ opacity: inView ? 1 : 0 }}
             transition={{ delay: 1.6 }}
           />
         </svg>
@@ -482,6 +485,7 @@ export function Landing() {
 
   return (
     <GuestOnly>
+      <SystemTheme />
       <div
         className="min-h-screen bg-background text-foreground"
         style={{ fontFamily: "var(--font-sans)" }}
@@ -514,7 +518,7 @@ export function Landing() {
             <button
               type="button"
               onClick={() => navigate("/demo")}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors px-3 py-1.5"
+              className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors px-3 py-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
               Try the demo

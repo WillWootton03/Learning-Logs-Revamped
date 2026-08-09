@@ -5,6 +5,25 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Learning Logs</title>
+    <script>
+      // Apply the theme before the bundle loads to avoid a flash of the wrong
+      // scheme. The public landing (/ and /demo) always follow the browser's
+      // color scheme; the app pages use the saved preference (dark fallback).
+      (function () {
+        try {
+          var path = window.location.pathname.replace(/\/+$/, "") || "/";
+          var isPublic = path === "/" || path === "/demo";
+          var saved = localStorage.getItem("theme");
+          var dark;
+          if (isPublic) {
+            dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          } else {
+            dark = saved === "dark" || (saved !== "light");
+          }
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
