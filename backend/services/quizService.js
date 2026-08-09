@@ -66,37 +66,27 @@ async function resolveTagIds(userId, boardId, tagIds) {
 }
 
 /**
- * Pick up to `count` distractors for one question from a pre-shuffled pool.
- * Because the pool is already randomly ordered, the first suitable candidates
- * are the distractors — no need to build every fake answer. Skips the
- * question's own concept and any answer already used (the correct answer plus
- * any distractor picked for this question).
- * @param {object} concept - The question's own concept row.
- * @param {Array<object>} pool - Pre-shuffled eligible concepts (distractor source).
- * @param {number} count - Maximum number of distractors to return.
+ * Grab `count` random answers from the pool as distractors. Exactly `count`
+ * iterations of Math.random — one per distractor, no loops over the pool.
+ * Callers already verify the pool is large enough, so no edge handling.
+ * @param {Array<object>} pool - All eligible concepts.
+ * @param {number} count - Number of distractors wanted.
  * @returns {string[]}
  */
-function pickDistractors(concept, pool, count) {
-  const seen = new Set([normalize(concept.answer)]);
+function pickDistractors(pool, count) {
   const distractors = [];
-  for (const candidate of pool) {
-    if (distractors.length === count) break;
-    if (candidate.concept_id === concept.concept_id) continue;
-    const normalized = normalize(candidate.answer);
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    distractors.push(candidate.answer);
+  for (let i = 0; i < count; i += 1) {
+    distractors.push(pool[Math.floor(Math.random() * pool.length)].answer);
   }
   return distractors;
 }
 
 /**
  * Assemble the question payload for one concept in the requested style.
- * `pool` must already be shuffled; pickDistractors grabs the first suitable
- * candidates rather than scanning the whole array per question.
+ * Multiple choice: 3 random distractors + the real answer, shuffled.
  * @param {string} style
  * @param {object} concept
- * @param {Array<object>} pool - Pre-shuffled eligible concepts.
+ * @param {Array<object>} pool - All eligible concepts.
  * @returns {object}
  */
 function buildQuestion(style, concept, pool) {
@@ -109,7 +99,7 @@ function buildQuestion(style, concept, pool) {
     return base;
   }
   if (style === 'multiple_choice') {
-    const distractors = pickDistractors(concept, pool, MCQ_OPTION_COUNT - 1);
+    const distractors = pickDistractors(pool, MCQ_OPTION_COUNT - 1);
     const options = shuffle([concept.answer, ...distractors]);
     return { ...base, options };
   }
@@ -117,7 +107,7 @@ function buildQuestion(style, concept, pool) {
   // (expected: false) with 50/50 probability. The expected value is NOT sent
   // to the client; the client echoes back the statement it displayed and the
   // server recomputes correctness at scoring time.
-  const [distractor] = pickDistractors(concept, pool, 1);
+  const [distractor] = pickDistractors(pool, 1);
   const useRealAnswer = distractor === undefined || Math.random() < 0.5;
   const statement = useRealAnswer ? concept.answer : distractor;
   return { ...base, statement };
@@ -177,12 +167,8 @@ async function generateQuestions(userId, boardId, { style, tagIds, includeKnown 
     throw new AppError(404, 'No concepts are eligible for this quiz');
   }
   const count = questionCount ? Math.min(questionCount, pool.length, MAX_QUESTIONS) : Math.min(pool.length, MAX_QUESTIONS);
-  // Shuffle once: the same random order both picks which concepts become
-  // questions and supplies distractors, so pickDistractors can just take the
-  // first suitable candidates instead of scanning the pool per question.
-  const shuffledPool = shuffle(pool);
-  const selected = shuffledPool.slice(0, count);
-  return selected.map((concept) => buildQuestion(style, concept, shuffledPool));
+  const selected = shuffle(pool).slice(0, count);
+  return selected.map((concept) => buildQuestion(style, concept, pool));
 }
 
 /**
