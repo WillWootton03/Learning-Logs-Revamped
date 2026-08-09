@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
@@ -48,9 +48,17 @@ export function BoardDetail() {
   const board = boards.find((b) => b.id === id);
   const boardConcepts = id ? concepts[id] ?? [] : [];
   const isLoading = loadedFor !== id;
+  // The concepts preview lives in its own scrollbox (~6 rows visible); the
+  // sentinel watches that box's scroll so rows keep streaming in as it moves.
+  const conceptsScrollRef = useRef<HTMLDivElement | null>(null);
   // Only the slice that fits the viewport is rendered; the rest stay in
-  // memory until the sentinel pulls them in as the user scrolls.
-  const { visible, hasMore, sentinelRef } = useIncrementalList(boardConcepts, DISPLAY_PAGE_SIZE, id ?? undefined);
+  // memory until the sentinel pulls them in as the user scrolls the box.
+  const { visible, hasMore, sentinelRef } = useIncrementalList(
+    boardConcepts,
+    DISPLAY_PAGE_SIZE,
+    id ?? undefined,
+    conceptsScrollRef
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -237,50 +245,64 @@ export function BoardDetail() {
             </div>
           ) : (
             <>
-              {visible.map((concept, i) => (
-                <motion.div
-                  key={concept.id}
-                  // Rows animate in on mount, but sentinel-appended rows get a
-                  // fast, delay-free transition so the list never leaves a
-                  // blank region you can scroll into while they appear.
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.04 }}
-                  onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
-                  className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer group"
+              {/* Concepts scrollbox — ~6 rows visible, scroll inside for more. */}
+              <div
+                ref={conceptsScrollRef}
+                className="tag-scrollbox max-h-[480px] overflow-y-auto flex flex-col gap-2 pr-1 overscroll-contain rounded-xl"
+              >
+                {visible.map((concept, i) => (
+                  <motion.div
+                    key={concept.id}
+                    // Rows animate in on mount, but sentinel-appended rows get a
+                    // fast, delay-free transition so the list never leaves a
+                    // blank region you can scroll into while they appear.
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.04 }}
+                    onClick={() => navigate(`/app/board/${id}/concept/${concept.id}`)}
+                    className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer group shrink-0"
+                  >
+                    <div className="shrink-0">
+                      {concept.learned ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>
+                        {concept.title}
+                      </p>
+                      {concept.tags.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          {concept.tags.map((tag) => (
+                            <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {concept.lastReviewed && (
+                      <span className="text-[11px] text-muted-foreground font-mono shrink-0 hidden sm:block">
+                        {concept.lastReviewed}
+                      </span>
+                    )}
+                  </motion.div>
+                ))}
+                {/* Sentinel for scroll-driven rendering: the useIncrementalList hook
+                    watches this element and appends the next slice of concepts once
+                    it reaches the scrollbox's visible area. */}
+                {hasMore && <div ref={sentinelRef} className="h-px shrink-0" aria-hidden="true" />}
+              </div>
+              {boardConcepts.length > 6 && (
+                <button
+                  onClick={() => navigate(`/app/board/${id}/concepts`)}
+                  className="w-full py-3 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
                 >
-                  <div className="shrink-0">
-                    {concept.learned ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${concept.learned ? "text-foreground" : "text-muted-foreground"}`}>
-                      {concept.title}
-                    </p>
-                    {concept.tags.length > 0 && (
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {concept.tags.map((tag) => (
-                          <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {concept.lastReviewed && (
-                    <span className="text-[11px] text-muted-foreground font-mono shrink-0 hidden sm:block">
-                      {concept.lastReviewed}
-                    </span>
-                  )}
-                </motion.div>
-              ))}
-              {/* Sentinel for scroll-driven rendering: the useIncrementalList hook
-                  watches this element and appends the next slice of concepts once
-                  it reaches the viewport. */}
-              {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
+                  View all {boardConcepts.length} concepts
+                </button>
+              )}
             </>
           )}
         </div>

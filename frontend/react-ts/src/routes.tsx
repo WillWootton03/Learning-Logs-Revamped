@@ -2,6 +2,7 @@ import { createBrowserRouter, Outlet } from "react-router";
 import { ScrollToTop } from "./app/components/ScrollToTop";
 import { Root } from "./app/pages/Root";
 import { Landing } from "./app/pages/Landing";
+import { Demo } from "./app/pages/Demo";
 import { Dashboard } from "./app/pages/Dashboard";
 import { BoardDetail } from "./app/pages/BoardDetail";
 import { ConceptDetail } from "./app/pages/ConceptDetail";
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: "/", Component: Landing },
+      { path: "/demo", Component: Demo },
       {
         path: "/app",
         Component: Root,

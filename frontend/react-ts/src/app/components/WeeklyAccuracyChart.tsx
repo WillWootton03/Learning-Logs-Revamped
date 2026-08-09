@@ -86,10 +86,13 @@ export function WeeklyAccuracyChart({
   boardId,
   runs,
   isLoading = false,
+  onViewSessions,
 }: {
   boardId: string;
   runs: AccuracyRun[];
   isLoading?: boolean;
+  /** Override the default "View sessions" navigation (e.g. in the demo page). */
+  onViewSessions?: () => void;
 }) {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState<number | null>(null);
@@ -145,7 +148,7 @@ export function WeeklyAccuracyChart({
         )}
         <button
           type="button"
-          onClick={() => navigate(`/app/board/${boardId}/sessions`)}
+          onClick={() => (onViewSessions ? onViewSessions() : navigate(`/app/board/${boardId}/sessions`))}
           className="flex items-center gap-1.5 text-xs text-primary hover:underline"
         >
           View sessions

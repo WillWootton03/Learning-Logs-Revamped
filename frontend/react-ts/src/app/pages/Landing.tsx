@@ -20,9 +20,9 @@ import {
   LayoutGrid,
   Music,
   Palette,
-  Play,
   Search,
   Sigma,
+  Sparkles,
   Tag,
   Timer,
   TrendingUp,
@@ -513,6 +513,14 @@ export function Landing() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => navigate("/demo")}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors px-3 py-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Try the demo
+            </button>
+            <button
+              type="button"
               onClick={() => navigate("/login")}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5"
             >
@@ -627,13 +635,13 @@ export function Landing() {
               </button>
               <button
                 type="button"
-                onClick={() => scrollTo("practice")}
+                onClick={() => navigate("/demo")}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl border border-border text-sm text-foreground hover:border-primary/40 hover:bg-secondary/40 transition-colors"
               >
                 <span className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                  <Play className="w-3 h-3 fill-current" />
+                  <Sparkles className="w-3 h-3" />
                 </span>
-                Watch it work
+                Try the demo
               </button>
             </div>
           </motion.div>
