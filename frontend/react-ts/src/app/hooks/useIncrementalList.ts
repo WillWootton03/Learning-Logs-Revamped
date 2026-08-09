@@ -13,7 +13,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * boards starts each list at the initial slice while a list you already
  * scrolled through keeps its place.
  */
-export function useIncrementalList<T>(items: T[], pageSize: number, key?: string) {
+export function useIncrementalList<T>(
+  items: T[],
+  pageSize: number,
+  key?: string,
+  /** When the list lives in a scroll container, pass its ref so the sentinel
+   *  observes that container's scroll instead of the window's. */
+  scrollRef?: React.RefObject<HTMLElement | null>
+) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   // Items rendered so far per list key. An absent key means the initial slice.
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -37,23 +44,29 @@ export function useIncrementalList<T>(items: T[], pageSize: number, key?: string
         const sentinel = sentinelRef.current;
         if (!sentinel) return;
         const rect = sentinel.getBoundingClientRect();
-        if (rect.top <= window.innerHeight) loadMore();
+        const container = scrollRef?.current;
+        // Scroll containers clip their children, so the sentinel's
+        // viewport-relative top must be compared against the container's
+        // bottom edge rather than the window height.
+        const viewportBottom = container ? container.getBoundingClientRect().bottom : window.innerHeight;
+        if (rect.top <= viewportBottom) loadMore();
       });
     };
 
-    window.addEventListener("scroll", check, { passive: true });
+    const target = scrollRef?.current ?? window;
+    target.addEventListener("scroll", check, { passive: true });
     window.addEventListener("resize", check);
-    // Fill the viewport once when the slice changes. The effect re-runs after
+    // Fill the container once when the slice changes. The effect re-runs after
     // every bump (count is a dependency), and each re-run checks the sentinel
     // once, so slices chain in only until the sentinel is out of view — i.e.
     // until the screen is filled — then it takes a real scroll to load more.
     check();
     return () => {
       ticking = false;
-      window.removeEventListener("scroll", check);
+      target.removeEventListener("scroll", check);
       window.removeEventListener("resize", check);
     };
-  }, [key, hasMore, count, loadMore]);
+  }, [key, hasMore, count, loadMore, scrollRef]);
 
   return {
     visible: items.slice(0, count),

@@ -39,7 +39,8 @@ export function formatSessionDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** All quiz runs on a board, newest first. */
+/** All quiz runs on a board, newest first. Includes the raw createdAt so
+ * views can group by day (the `date` label alone isn't sufficient). */
 export async function listRuns(boardId: string) {
   const res = await request<{ runs: RunRow[] }>(`/boards/${boardId}/quizzes`);
   return res.runs.map((row) => {
@@ -56,8 +57,9 @@ export async function listRuns(boardId: string) {
       duration: formatDuration(timeElapsedMs),
       timeElapsedMs,
       date: formatSessionDate(row.created_at),
+      createdAt: row.created_at,
       results: [],
-    } satisfies SessionRecord;
+    } satisfies SessionRecord & { createdAt: string };
   });
 }
 
