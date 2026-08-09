@@ -43,8 +43,22 @@ const NO_REFRESH_PATHS = new Set(["/auth/login", "/auth/register", "/auth/refres
 /** Shared in-flight refresh, so N parallel 401s trigger exactly one call. */
 let refreshPromise: Promise<boolean> | null = null;
 
+/**
+ * Cloudflare sometimes serves an interstitial challenge page (403 + the
+ * `cf-mitigated: challenge` header) on an API call — e.g. after the
+ * `cf_clearance` cookie expires following a long idle period. A `fetch()`
+ * can't render that page, so the request would just fail silently. When we
+ * detect it, we reload the document once; the browser navigates, passes the
+ * challenge, sets a fresh clearance cookie, and the app resumes.
+ */
+let challengeReloadQueued = false;
+
+function isCloudflareChallenge(res: Response): boolean {
+  return res.status === 403 && res.headers.get("cf-mitigated") === "challenge";
+}
+
 async function doFetch(path: string, init: RequestInit): Promise<Response> {
-  return fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
     headers: {
@@ -52,6 +66,11 @@ async function doFetch(path: string, init: RequestInit): Promise<Response> {
       ...init.headers,
     },
   });
+  if (isCloudflareChallenge(res) && !challengeReloadQueued) {
+    challengeReloadQueued = true;
+    window.location.reload();
+  }
+  return res;
 }
 
 /**
