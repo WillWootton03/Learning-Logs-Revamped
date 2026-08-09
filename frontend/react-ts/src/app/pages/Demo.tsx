@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useNavigate } from "react-router";
 import {
-  ArrowLeft, ArrowRight, BarChart2, BookOpen, CalendarDays, Check, CheckCircle2, ChevronRight, Circle,
-  Clock, Flame, GraduationCap, LayoutGrid, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Tag, Trophy, Upload, X,
+  ArrowLeft, ArrowRight, BarChart2, BookOpen, CalendarDays, Check, CheckCircle2, Circle,
+  Clock, Flame, GraduationCap, LayoutGrid, Menu, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Tag, Trophy, Upload, X,
 } from "lucide-react";
 import { useDemoStore } from "../demo/useDemoStore";
+import { SystemTheme } from "../components/SystemTheme";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import {
   DemoAddConceptModal,
   DemoAddTagModal,
@@ -24,7 +26,7 @@ import {
 } from "../demo/DemoViews";
 import { WeeklyAccuracyChart, type AccuracyRun } from "../components/WeeklyAccuracyChart";
 import { ActivityLog, type ActivityEntry } from "../components/ActivityLog";
-import { initials, displayName } from "../lib/userName";
+import { displayName } from "../lib/userName";
 import { quizStyleLabel } from "../lib/quizStyles";
 import type { DemoBoard, DemoConcept, DemoPreset, DemoRun } from "../demo/demoData";
 
@@ -54,6 +56,9 @@ function greeting(): string {
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
+
+/** How many concepts on the board preview are rendered before the scroll sentinel appends more. */
+const DISPLAY_PAGE_SIZE = 10;
 
 /** Relative label for a date, like "Today", "Yesterday", or "Aug 4". */
 function lastUsedLabel(iso: string | undefined): string {
@@ -97,7 +102,7 @@ export function Demo() {
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
 
-  const { user, boards, tags, concepts, presets, runs } = state;
+  const { boards, tags, concepts, presets, runs } = state;
 
   // Scroll to top on every view change (the demo is a single page, so it
   // must reset scroll position itself rather than relying on the router).
@@ -168,9 +173,9 @@ export function Demo() {
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
+      <SystemTheme />
       {/* ------------------------------- header ------------------------------ */}
       <DemoHeader
-        user={user}
         currentBoard={activeBoard ?? undefined}
         activeNav={
           view.name === "concepts" || view.name === "concept"
@@ -184,7 +189,6 @@ export function Demo() {
                   : undefined
         }
         onNavigateHome={() => navigate("/")}
-        onNavigateBoard={() => activeBoard && setView({ name: "board", boardId: activeBoard.id })}
         onNavigate={(nav) => {
           if (!activeBoard) return;
           if (nav === "concepts") setView({ name: "concepts", boardId: activeBoard.id });
@@ -431,25 +435,36 @@ export function Demo() {
 /* ------------------------------- header ------------------------------- */
 
 function DemoHeader({
-  user,
   currentBoard,
   activeNav,
   onNavigateHome,
-  onNavigateBoard,
   onNavigate,
   onSignup,
   onReset,
 }: {
-  user: { name: string; email: string };
   currentBoard?: DemoBoard;
   /** Which board nav item is active (matches the real Navbar's active state). */
   activeNav?: "concepts" | "tags" | "sessions" | "settings";
   onNavigateHome: () => void;
-  onNavigateBoard: () => void;
   onNavigate: (nav: "concepts" | "tags" | "sessions" | "settings") => void;
   onSignup: () => void;
   onReset: () => void;
 }) {
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
+  const boardMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close the mobile board menu on outside click, mirroring the real Navbar.
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      if (boardMenuRef.current && !boardMenuRef.current.contains(target)) {
+        setBoardMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   const navItems: { key: "concepts" | "tags" | "sessions" | "settings"; label: string; icon: React.ReactNode }[] = [
     { key: "concepts", label: "Concepts", icon: <BookOpen className="w-3.5 h-3.5" /> },
     { key: "tags", label: "Tags", icon: <Tag className="w-3.5 h-3.5" /> },
@@ -459,25 +474,13 @@ function DemoHeader({
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-8 h-18 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={onNavigateHome} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <GraduationCap className="w-5 h-5 text-primary" />
-            <span className="text-sm tracking-wide text-foreground">Learning Logs</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
+          <button onClick={onNavigateHome} className="flex items-center gap-1.5 sm:gap-2 hover:opacity-80 transition-opacity min-w-0">
+            <GraduationCap className="w-5 h-5 text-primary shrink-0" />
+            <span className="text-sm tracking-wide text-foreground truncate">Learning Logs</span>
           </button>
-          {currentBoard && (
-            <>
-              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <button
-                onClick={onNavigateBoard}
-                className="text-sm text-foreground hover:text-primary transition-colors truncate max-w-[140px] sm:max-w-[220px]"
-                style={{ color: currentBoard.color }}
-              >
-                {currentBoard.title}
-              </button>
-            </>
-          )}
-          <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground bg-secondary rounded-full px-2 py-0.5">
+          <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground bg-secondary rounded-full px-2 py-0.5 shrink-0">
             <Sparkles className="w-2.5 h-2.5" />
             Demo
           </span>
@@ -503,7 +506,55 @@ function DemoHeader({
           </nav>
         )}
 
-        <div className="flex items-center gap-3 ml-auto shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0">
+          {/* Mobile board nav dropdown — replaces the inline nav on small
+              screens when inside a board, so the board's sub-pages stay one
+              tap away, just like the real Navbar. */}
+          {currentBoard && (
+            <div className="relative md:hidden" ref={boardMenuRef}>
+              <button
+                onClick={() => setBoardMenuOpen((v) => !v)}
+                aria-label="Board menu"
+                className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors ${boardMenuOpen ? "bg-secondary" : "hover:bg-secondary/60"}`}
+              >
+                <Menu className="w-4 h-4" />
+              </button>
+
+              <AnimatePresence>
+                {boardMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className="absolute -right-20 top-[calc(100%+8px)] w-48 bg-card border border-border rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50"
+                  >
+                    <div className="px-4 py-2.5 border-b border-border truncate">
+                      <p className="text-sm text-foreground truncate">{currentBoard.title}</p>
+                    </div>
+                    <div className="py-1.5">
+                      {navItems.map((item) => (
+                        <button
+                          key={item.key}
+                          onClick={() => {
+                            setBoardMenuOpen(false);
+                            onNavigate(item.key);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
+                            activeNav === item.key ? "bg-secondary text-foreground" : "text-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          <span className={activeNav === item.key ? "text-foreground" : "text-muted-foreground"}>{item.icon}</span>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
           <button
             onClick={onReset}
             className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
@@ -511,27 +562,16 @@ function DemoHeader({
             <RotateCcw className="w-3.5 h-3.5" />
             Reset
           </button>
+
+          {/* Sign up — replaces the disabled profile avatar so there's always
+              a one-tap CTA that fits on small screens. */}
           <button
             onClick={onSignup}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
+            aria-label="Create account"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
           >
-            Create account
+            <Plus className="w-4 h-4" />
           </button>
-          <div className="relative group">
-            <button
-              disabled
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg opacity-45 cursor-not-allowed"
-              aria-disabled="true"
-            >
-              <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
-                <span className="text-[10px] text-primary font-mono">{initials(user.name, user.email)}</span>
-              </div>
-              <span className="text-sm text-foreground hidden sm:block">{displayName(user.name, user.email)}</span>
-            </button>
-            <span className="absolute bottom-full mb-2 right-0 px-2.5 py-1.5 text-[10px] font-mono text-muted-foreground bg-card border border-border rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 shadow-lg shadow-black/40">
-              Profile & settings are disabled in the demo
-            </span>
-          </div>
         </div>
       </div>
     </header>
@@ -875,6 +915,17 @@ function BoardView({
     createdAt: r.createdAt,
   }));
 
+  // The concepts preview lives in its own scrollbox; the sentinel watches that
+  // box's scroll so rows stream in 10 at a time as the user scrolls, matching
+  // the real BoardDetail page.
+  const conceptsScrollRef = useRef<HTMLDivElement | null>(null);
+  const { visible, hasMore, sentinelRef } = useIncrementalList(
+    concepts,
+    DISPLAY_PAGE_SIZE,
+    board.id,
+    conceptsScrollRef
+  );
+
   return (
     <main className="flex flex-col gap-8">
       {/* back + header — mirrors the real BoardDetail header */}
@@ -974,14 +1025,21 @@ function BoardView({
           </div>
         ) : (
           <>
-            {/* Concepts scrollbox — ~6 rows visible, scroll inside for more. */}
-            <div className="tag-scrollbox max-h-[480px] overflow-y-auto flex flex-col gap-2 pr-1 overscroll-contain rounded-xl">
-              {concepts.map((c, i) => (
+            {/* Concepts scrollbox — ~6 rows visible, scroll inside for more.
+                Rows stream in 10 at a time via the scroll sentinel. */}
+            <div
+              ref={conceptsScrollRef}
+              className="tag-scrollbox max-h-[480px] overflow-y-auto flex flex-col gap-2 pr-1 overscroll-contain rounded-xl"
+            >
+              {visible.map((c, i) => (
                 <motion.div
                   key={c.id}
+                  // Rows animate in on mount, but sentinel-appended rows get a
+                  // fast, delay-free transition so the list never leaves a
+                  // blank region you can scroll into while they appear.
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.15, delay: i * 0.04 }}
+                  transition={{ duration: 0.15, delay: i >= DISPLAY_PAGE_SIZE ? 0 : i * 0.04 }}
                   onClick={() => onOpenConcept(c.id)}
                   className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-primary/30 transition-colors cursor-pointer group shrink-0"
                 >
@@ -1011,6 +1069,7 @@ function BoardView({
                   )}
                 </motion.div>
               ))}
+              {hasMore && <div ref={sentinelRef} className="h-px shrink-0" aria-hidden="true" />}
             </div>
             {concepts.length > 6 && (
               <button

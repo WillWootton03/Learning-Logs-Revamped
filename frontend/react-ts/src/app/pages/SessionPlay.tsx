@@ -8,6 +8,7 @@ import {
   CornerDownLeft,
   Flame,
   Lightbulb,
+  MousePointerClick,
   X,
   XCircle,
 } from "lucide-react";
@@ -231,11 +232,13 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
     quittingRef.current = quitting;
   }, [quitting]);
 
-  // While the result of a question is shown, pressing Enter skips the wait
-  // and jumps straight to the next question (cancelling the pending
-  // auto-advance so it can't double-fire). Enter coming from a text field is
-  // ignored so the very keystroke that submits a fill-in answer can't also
-  // skip the question — press Enter again afterwards to advance.
+  // While the result of a question is shown, pressing Enter (or tapping
+  // anywhere on a touch device) skips the wait and jumps straight to the next
+  // question (cancelling the pending auto-advance so it can't double-fire).
+  // Enter coming from a text field is ignored so the very keystroke that
+  // submits a fill-in answer can't also skip the question — press Enter again
+  // afterwards to advance. Taps on interactive elements are ignored too, so
+  // tapping a button (e.g. quit) doesn't also advance.
   useEffect(() => {
     if (phase !== "revealed") return;
     function onKeyDown(e: KeyboardEvent) {
@@ -250,8 +253,23 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
       }
       advanceRef.current();
     }
+    function onTouchEnd(e: TouchEvent) {
+      if (quittingRef.current) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("button, a, input, textarea, select, [role='button']")) return;
+      e.preventDefault();
+      if (advanceTimer.current) {
+        clearTimeout(advanceTimer.current);
+        advanceTimer.current = null;
+      }
+      advanceRef.current();
+    }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("touchend", onTouchEnd, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
   }, [phase]);
 
   function handleTFSelect(saysTrue: boolean) {
@@ -570,9 +588,11 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
               className="flex items-center justify-center gap-2 pt-1 text-muted-foreground"
             >
               <span className="w-6 h-6 rounded-md border border-border flex items-center justify-center">
-                <CornerDownLeft className="w-3.5 h-3.5" />
+                <MousePointerClick className="w-3.5 h-3.5 sm:hidden" />
+                <CornerDownLeft className="w-3.5 h-3.5 hidden sm:block" />
               </span>
-              <span className="text-xs font-mono tracking-wide">Press Enter to continue</span>
+              <span className="text-xs font-mono tracking-wide sm:hidden">Tap to go to next question</span>
+              <span className="text-xs font-mono tracking-wide hidden sm:block">Press Enter to continue</span>
             </motion.div>
           )}
         </motion.div>
