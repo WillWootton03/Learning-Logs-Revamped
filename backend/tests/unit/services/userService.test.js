@@ -239,15 +239,29 @@ describe('userService.update', () => {
 });
 
 describe('userService.remove', () => {
-  it('returns the deleted user id', async () => {
+  it('returns the deleted user id when the account is verified', async () => {
+    userRepository.findById.mockResolvedValue({ ...RAW_USER, email_verified: true });
     userRepository.remove.mockResolvedValue(true);
 
     await expect(userService.remove('user-1')).resolves.toEqual({ user_id: 'user-1' });
+    expect(userRepository.remove).toHaveBeenCalledWith('user-1');
+  });
+
+  it('rejects with 403 EMAIL_NOT_VERIFIED for an unverified account', async () => {
+    userRepository.findById.mockResolvedValue({ ...RAW_USER, email_verified: false });
+
+    await expect(userService.remove('user-1')).rejects.toMatchObject({
+      status: 403,
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+    // The row must not be deleted.
+    expect(userRepository.remove).not.toHaveBeenCalled();
   });
 
   it('rejects with 404 when the user is missing', async () => {
-    userRepository.remove.mockResolvedValue(false);
+    userRepository.findById.mockResolvedValue(null);
 
     await expect(userService.remove('ghost')).rejects.toMatchObject({ status: 404 });
+    expect(userRepository.remove).not.toHaveBeenCalled();
   });
 });

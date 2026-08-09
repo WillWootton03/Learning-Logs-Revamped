@@ -19,6 +19,9 @@ import { AddConceptModal } from "../components/AddConceptModal";
 import { CSVUploadModal } from "../components/CSVUploadModal";
 import { SessionModal } from "../components/SessionModal";
 import { BackButton } from "../components/BackButton";
+import { ActivityLog, type ActivityEntry } from "../components/ActivityLog";
+import { listRuns } from "../lib/api/sessions";
+import type { SessionRecord } from "../types";
 
 /** How many concepts on the board page are rendered before the scroll sentinel appends more. */
 const DISPLAY_PAGE_SIZE = 10;
@@ -32,6 +35,9 @@ export function BoardDetail() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [runs, setRuns] = useState<SessionRecord[]>([]);
+  // Starts true so the activity log shows its skeleton while the fetch runs.
+  const [runsLoading, setRunsLoading] = useState(true);
   // Tracks the board whose concepts have finished loading; while it doesn't
   // match the current route the page shows a spinner. Using derived state
   // (rather than resetting flags in the effect) keeps all writes in callbacks.
@@ -65,6 +71,26 @@ export function BoardDetail() {
     };
   }, [id, loadConcepts]);
 
+  // The activity log is board-scoped: only sessions run on this board. It's
+  // fetched once per page visit alongside the concepts.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    listRuns(id)
+      .then((rows) => {
+        if (!cancelled) setRuns(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setRuns([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRunsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   if (isBoardsLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -88,6 +114,18 @@ export function BoardDetail() {
   const totalCount = boardConcepts.length;
   const progress = totalCount > 0 ? Math.round((learnedCount / totalCount) * 100) : 0;
   const allLearned = totalCount > 0 && learnedCount === totalCount;
+
+  // Past sessions on this board, newest first, mapped onto the activity feed.
+  // The secondary line shows the session's settings name — the board title is
+  // redundant here since every row belongs to this board.
+  const activityEntries: ActivityEntry[] = runs.map((run) => ({
+    id: run.id,
+    boardId: run.boardId,
+    type: "session",
+    message: `${run.correctCount}/${run.conceptsStudied} correct`,
+    board: run.presetName,
+    timestamp: run.date,
+  }));
 
   return (
     <>
@@ -148,6 +186,16 @@ export function BoardDetail() {
             {learnedCount} of {totalCount} concepts learned
           </p>
         </div>
+
+        {/* activity log — past sessions on this board */}
+        <ActivityLog
+          entries={activityEntries}
+          title="Activity Log"
+          subtitle={`Sessions on ${board.title}`}
+          badge={`${runs.length} session${runs.length === 1 ? "" : "s"}`}
+          onSelect={(entry) => navigate(`/app/board/${id}/sessions/${entry.id}`)}
+          isLoading={runsLoading}
+        />
 
         {/* concepts list */}
         <div className="flex flex-col gap-3">

@@ -9,6 +9,8 @@ import type { SessionRecord } from "../../types";
 
 type RunRow = {
   quiz_id: string;
+  /** Present on the user-wide activity-log feed only. */
+  board_id?: string;
   quiz_settings_id: string | null;
   questions_count: number;
   /** BIGINT — pg returns it as a string, hence the string type here. */
@@ -16,6 +18,8 @@ type RunRow = {
   correct_count: number;
   created_at: string;
   settings_name: string | null;
+  /** Present on the user-wide activity-log feed only. */
+  board_title?: string;
 };
 
 /** "3 min" / "45 sec" / "2 min 30 sec" from milliseconds. */
@@ -55,6 +59,40 @@ export async function listRuns(boardId: string) {
       results: [],
     } satisfies SessionRecord;
   });
+}
+
+/** The run summary type used by the user-wide activity feed. */
+export type ActivityRun = {
+  id: string;
+  boardId: string;
+  boardTitle: string;
+  presetName: string;
+  conceptsStudied: number;
+  correctCount: number;
+  timeElapsedMs: number;
+  date: string;
+  createdAt: string;
+};
+
+/** Every quiz run across the user's boards, newest first (activity log feed). */
+export async function listAllRuns(): Promise<ActivityRun[]> {
+  const res = await request<{ runs: RunRow[] }>(`/users/me/runs`);
+  return res.runs
+    // Cache entries written before board_id was added are stale; drop them so
+    // a click can't navigate to a board-less session. The 30-min TTL (or any
+    // new run) refreshes the cache with the board id included.
+    .filter((row) => row.board_id)
+    .map((row) => ({
+      id: row.quiz_id,
+      boardId: row.board_id!,
+      boardTitle: row.board_title ?? "Unknown board",
+      presetName: row.settings_name ?? "One-off quiz",
+      conceptsStudied: row.questions_count,
+      correctCount: row.correct_count,
+      timeElapsedMs: Number(row.time_elapsed_ms),
+      date: formatSessionDate(row.created_at),
+      createdAt: row.created_at,
+    }));
 }
 
 // ── Run breakdown (session detail) ─────────────────────────────────────────

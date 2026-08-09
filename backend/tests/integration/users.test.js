@@ -206,6 +206,24 @@ describe('DELETE /users/me', () => {
     const me = await agent.get('/users/me');
     expect(me.status).toBe(401);
   });
+
+  it('rejects deletion with 403 while the email is unverified', async () => {
+    const agent = await registerUser();
+    // Changing the email resets verification (new address needs a fresh code),
+    // but the session survives — so the account is now reachable yet unverified.
+    await agent.put('/users/me').send({ email: 'new@example.com' }).expect(200);
+    expect((await agent.get('/users/me')).body.email_verified).toBe(false);
+
+    const res = await agent.delete('/users/me');
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
+
+    // The account is still there and still reachable with the same token.
+    const me = await agent.get('/users/me');
+    expect(me.status).toBe(200);
+    expect(me.body.email).toBe('new@example.com');
+  });
 });
 
 describe('isolation between users', () => {

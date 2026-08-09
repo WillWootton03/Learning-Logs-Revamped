@@ -112,6 +112,26 @@ async function createRun(userId, boardId, { quizSettingsId, timeElapsedMs, resul
 }
 
 /**
+ * List every quiz run for a user across all their boards, newest first. The
+ * board join both enforces ownership and brings in the board title so the
+ * activity log can show where each session happened.
+ * @param {string} userId - User id (UUID).
+ * @returns {Promise<Array<object>>} Run rows with settings_name + board_title.
+ */
+async function findRunsByUser(userId) {
+  const result = await pool.query(
+    `SELECT ${RUN_LIST_COLUMNS}, q.board_id, qs.name AS settings_name, b.name AS board_title
+     FROM quiz q
+     JOIN boards b ON b.board_id = q.board_id
+     LEFT JOIN quiz_settings qs ON qs.quiz_settings_id = q.quiz_settings_id
+     WHERE b.user_id = $1
+     ORDER BY q.created_at DESC`,
+    [userId]
+  );
+  return result.rows;
+}
+
+/**
  * List all quiz runs for a board, newest first.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
@@ -219,6 +239,7 @@ async function removeAll(userId, boardId) {
 module.exports = {
   findEligibleConcepts,
   createRun,
+  findRunsByUser,
   findRunsByBoard,
   findRunsBySettings,
   findRunById,

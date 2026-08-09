@@ -214,9 +214,11 @@ async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedM
     timeElapsedMs,
     results,
   });
-  // A run bumps mastery counters, so the cached concept list and run list for
-  // this board are both stale.
+  // A run bumps mastery counters and adds a session, so the cached concept
+  // list, this board's run list, and the user-wide activity-log runs are all
+  // stale.
   await cache.invalidateBoard(userId, boardId);
+  await cache.deleteKeys([cache.userKey(userId, 'runs')]);
   return { run, results };
 }
 
@@ -276,6 +278,22 @@ async function recordRunFromSettings(userId, boardId, quizSettingsId, { timeElap
     // never gets to override how its own run is scored.
     exactMatching: setting.exact_matching,
   });
+}
+
+/**
+ * List all quiz runs for a user across every board, newest first. Used by the
+ * activity log. Served from a user-scoped cache key; a miss hits Postgres and
+ * repopulates. Written to invalidateBoard on every run creation.
+ * @param {string} userId
+ * @returns {Promise<Array<object>>}
+ */
+async function listAllRuns(userId) {
+  const key = cache.userKey(userId, 'runs');
+  const cached = await cache.getJSON(key);
+  if (cached) return cached;
+  const rows = await quizRepository.findRunsByUser(userId);
+  await cache.setJSON(key, rows);
+  return rows;
 }
 
 /**
@@ -351,6 +369,7 @@ module.exports = {
   generateQuestions,
   recordRun,
   recordRunFromSettings,
+  listAllRuns,
   listRuns,
   listRunsBySettings,
   getRunBreakdown,

@@ -52,6 +52,15 @@ async function recordRunFromSettings(req, res) {
 }
 
 /**
+ * GET /users/me/runs — list every quiz run across the user's boards, newest
+ * first, for the activity log. Scoped by the authenticated user id.
+ */
+async function listAllRuns(req, res) {
+  const runs = await quizService.listAllRuns(req.userId);
+  return res.status(200).json({ runs });
+}
+
+/**
  * GET /boards/:boardId/quizzes — list all quiz runs on the board.
  */
 async function listRuns(req, res) {
@@ -93,6 +102,7 @@ module.exports = {
   generateQuestions: asyncHandler(generateQuestions),
   recordRun: asyncHandler(recordRun),
   recordRunFromSettings: asyncHandler(recordRunFromSettings),
+  listAllRuns: asyncHandler(listAllRuns),
   listRuns: asyncHandler(listRuns),
   listRunsBySettings: asyncHandler(listRunsBySettings),
   getRunBreakdown: asyncHandler(getRunBreakdown),

@@ -88,6 +88,22 @@ describe('POST /auth/forgot-password', () => {
     expect(count.rows[0].n).toBe(0);
   });
 
+  it('does not email a reset link to an unverified account', async () => {
+    // Register but skip the /auth/verify step, leaving email_verified false.
+    await request(app).post('/auth/register').send(VALID_USER).expect(201);
+
+    const res = await request(app)
+      .post('/auth/forgot-password')
+      .send({ email: VALID_USER.email });
+
+    // Same 200 as a missing account (no enumeration), but no email goes out
+    // and no token is stored until the address is verified.
+    expect(res.status).toBe(200);
+    expect(mailer.sendPasswordResetEmail).not.toHaveBeenCalled();
+    const count = await pool.query('SELECT COUNT(*)::int AS n FROM password_resets');
+    expect(count.rows[0].n).toBe(0);
+  });
+
   it('overwrites the previous token on a second request (one live link per user)', async () => {
     const { user } = await registerVerifiedUser(VALID_USER);
 

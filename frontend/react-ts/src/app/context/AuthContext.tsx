@@ -8,7 +8,6 @@ import {
   register as apiRegister,
   resendVerification as apiResendVerification,
   updateProfile as apiUpdateProfile,
-  changePassword as apiChangePassword,
   verifyEmail as apiVerifyEmail,
   ApiError,
   type User,
@@ -40,11 +39,6 @@ type AuthState = {
     name?: string;
     email?: string;
   }) => Promise<void>;
-  /**
-   * Change the signed-in user's password. The backend verifies the current
-   * password before writing the new hash. Local user state is untouched.
-   */
-  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Permanently delete the account (used by the settings danger zone). */
   deleteAccount: () => Promise<void>;
 };
@@ -142,10 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(updated);
   }
 
-  async function changePassword(currentPassword: string, newPassword: string) {
-    await apiChangePassword(currentPassword, newPassword);
-  }
-
   async function deleteAccount() {
     await apiDeleteAccount();
     setUser(null);
@@ -166,7 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         refresh,
         updateProfile,
-        changePassword,
         deleteAccount,
       }}
     >

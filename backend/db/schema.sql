@@ -127,6 +127,10 @@ CREATE INDEX IF NOT EXISTS idx_quiz_board_id ON quiz (board_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_quiz_settings_id ON quiz (quiz_settings_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON quiz_questions (quiz_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_questions_concept_id ON quiz_questions (concept_id);
+-- Supports the user-wide activity-log query (all runs across boards, newest
+-- first): the board join narrows by user, and this index serves the ORDER BY
+-- created_at DESC within each board without a per-board sort.
+CREATE INDEX IF NOT EXISTS idx_quiz_board_created ON quiz (board_id, created_at DESC);
 
 -- One reset row per user: the unique index backs both the per-user lookup
 -- (requestReset / cleanup) and the ON CONFLICT upsert in the repository.
