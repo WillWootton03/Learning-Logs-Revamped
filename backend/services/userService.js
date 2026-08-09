@@ -144,13 +144,19 @@ async function update(id, { fullName, email }) {
 }
 
 /**
- * Delete a user. Throws 404 if the id doesn't exist.
+ * Delete a user. Permanent account changes require a verified email, so an
+ * unverified account is refused with 403 EMAIL_NOT_VERIFIED — matching the
+ * reset-by-email gate. Throws 404 if the id doesn't exist.
  * @param {string} id - User id (UUID).
  * @returns {Promise<{user_id: string}>}
  */
 async function remove(id) {
-  const deleted = await userRepository.remove(id);
-  if (!deleted) throw new AppError(404, 'User not found');
+  const user = await userRepository.findById(id);
+  if (!user) throw new AppError(404, 'User not found');
+  if (!user.email_verified) {
+    throw new AppError(403, 'Verify your email before deleting your account', 'EMAIL_NOT_VERIFIED');
+  }
+  await userRepository.remove(id);
   return { user_id: id };
 }
 

@@ -55,6 +55,17 @@ class CacheClient {
   }
 
   /**
+   * Cache key for a user-scoped resource that spans all boards (e.g. the
+   * activity log's "all runs" list).
+   * @param {string} userId
+   * @param {string} resource
+   * @returns {string}
+   */
+  userKey(userId, resource) {
+    return `learninglogs:${userId}:all:${resource}`;
+  }
+
+  /**
    * Read a cached value. Returns null on a miss or any Redis failure.
    * @param {string} key
    * @returns {Promise<*|null>}

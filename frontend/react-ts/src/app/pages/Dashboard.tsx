@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { Search, LayoutGrid, Flame, Plus } from "lucide-react";
@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { displayName } from "../lib/userName";
 import { BoardCard } from "../components/BoardCard";
 import { ActivityLog, type ActivityEntry } from "../components/ActivityLog";
+import { listAllRuns, type ActivityRun } from "../lib/api/sessions";
 
 type Filter = "all" | "in-progress" | "completed";
 
@@ -20,11 +21,41 @@ function timeGreeting() {
 export function Dashboard() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [runs, setRuns] = useState<ActivityRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(true);
   const navigate = useNavigate();
   const { boards, isBoardsLoading, boardsError, reloadBoards } = useBoard();
   const { user } = useAuth();
 
+  // Past sessions across every board — the activity feed on the dashboard.
+  // runsLoading starts true so the skeleton shows during the fetch.
+  useEffect(() => {
+    let cancelled = false;
+    listAllRuns()
+      .then((rows) => {
+        if (!cancelled) setRuns(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setRuns([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRunsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const name = displayName(user?.fullName, user?.email);
+
+  const activityEntries: ActivityEntry[] = runs.map((run) => ({
+    id: run.id,
+    boardId: run.boardId,
+    type: "session",
+    message: `${run.correctCount}/${run.conceptsStudied} correct · ${run.presetName}`,
+    board: run.boardTitle,
+    timestamp: run.date,
+  }));
 
   if (isBoardsLoading) {
     return (
@@ -189,9 +220,15 @@ export function Dashboard() {
             <span className="text-sm">No boards match your search</span>
           </div>
         )}
-        {/* Activity feed is wired to real data later; pass entries when the
-            backend sessions/logs endpoints are consumed. */}
-        <ActivityLog entries={[] satisfies ActivityEntry[]} />
+        {/* Past sessions across all boards, newest first. */}
+        <ActivityLog
+          entries={activityEntries}
+          title="Activity Log"
+          subtitle="Your sessions across all boards"
+          badge={`${runs.length} session${runs.length === 1 ? "" : "s"}`}
+          onSelect={(entry) => navigate(`/app/board/${entry.boardId}/sessions/${entry.id}`)}
+          isLoading={runsLoading}
+        />
       </div>
     </main>
   );

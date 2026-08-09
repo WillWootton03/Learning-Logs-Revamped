@@ -40,8 +40,8 @@ export function getMe() {
 
 /**
  * Update the signed-in user's profile. Name and/or email can change; empty
- * name clears the display name. Password changes have their own endpoint
- * (changePassword) so credential writes never share this code path.
+ * name clears the display name. Passwords are only changed through the email
+ * reset flow — there is deliberately no in-app change-password endpoint.
  */
 export function updateProfile(data: {
   name?: string;
@@ -51,17 +51,6 @@ export function updateProfile(data: {
     method: "PUT",
     body: JSON.stringify(data),
   }).then(toUser);
-}
-
-/**
- * Change the signed-in user's password. The backend verifies the current
- * password against the stored hash before replacing it with the new one.
- */
-export function changePassword(currentPassword: string, newPassword: string) {
-  return request<{ user_id: string }>("/users/me/password", {
-    method: "PUT",
-    body: JSON.stringify({ currentPassword, newPassword }),
-  });
 }
 
 /** Permanently delete the signed-in account. */

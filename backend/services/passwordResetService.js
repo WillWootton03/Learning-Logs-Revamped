@@ -27,7 +27,8 @@ function generateToken() {
 /**
  * Start a reset for an email. Responds identically whether or not the email
  * is registered (no user enumeration): the token is stored and emailed only
- * when a matching account exists.
+ * when a matching account exists. Unverified accounts are treated the same as
+ * nonexistent ones — no reset email is sent until the address is verified.
  * @param {string} email - The address from the forgot-password form.
  * @returns {Promise<{ok: true}>}
  */
@@ -38,7 +39,7 @@ async function requestReset(email) {
   const user = await pool.runWithContext({ email: normalized }, () =>
     userRepository.findByEmail(normalized)
   );
-  if (user) {
+  if (user && user.email_verified) {
     const token = generateToken();
     await pool.runWithContext({ userId: user.user_id }, () =>
       passwordResetRepository.upsert(user.user_id, token)

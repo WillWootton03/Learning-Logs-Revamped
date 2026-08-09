@@ -25,7 +25,8 @@ jest.mock('../../../repositories/userRepository');
 jest.mock('../../../repositories/passwordResetRepository');
 jest.mock('../../../services/mailer', () => ({ mailer: { sendPasswordResetEmail: jest.fn() } }));
 
-const USER = { user_id: 'user-1', email: 'ada@example.com' };
+const USER = { user_id: 'user-1', email: 'ada@example.com', email_verified: true };
+const UNVERIFIED_USER = { user_id: 'user-2', email: 'grace@example.com', email_verified: false };
 
 describe('passwordResetService.generateToken', () => {
   it('produces a 64-char hex string (256 bits of entropy)', () => {
@@ -71,6 +72,18 @@ describe('passwordResetService.requestReset', () => {
 
     expect(result).toEqual({ ok: true });
     // No token write and no email leak the fact that the account doesn't exist.
+    expect(passwordResetRepository.upsert).not.toHaveBeenCalled();
+    expect(mailer.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  it('treats an unverified account like a nonexistent one — no reset email', async () => {
+    userRepository.findByEmail.mockResolvedValue(UNVERIFIED_USER);
+
+    const result = await passwordResetService.requestReset('grace@example.com');
+
+    expect(result).toEqual({ ok: true });
+    // Same silent response as a missing account: no token, no email, and no
+    // way to tell the two apart from outside.
     expect(passwordResetRepository.upsert).not.toHaveBeenCalled();
     expect(mailer.sendPasswordResetEmail).not.toHaveBeenCalled();
   });
