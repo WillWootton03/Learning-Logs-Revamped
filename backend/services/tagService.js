@@ -33,7 +33,7 @@ function validateId(id) {
  */
 async function list(userId, boardId) {
   const key = cache.boardKey(userId, boardId, 'tags');
-  const cached = await cache.getJSON(key);
+  const cached = await cache.getJSON(key, '/boards/:boardId/tags');
   if (cached) return cached;
   const rows = await tagRepository.findAllByBoard(userId, boardId);
   await cache.setJSON(key, rows);

@@ -53,7 +53,7 @@ async function list(userId, boardId, tagId) {
   }
   if (tagId === undefined || tagId === null) {
     const key = cache.boardKey(userId, boardId, 'concepts');
-    const cached = await cache.getJSON(key);
+    const cached = await cache.getJSON(key, '/boards/:boardId/concepts');
     if (cached) return cached;
     const rows = await conceptRepository.findAllByBoard(userId, boardId, null);
     await cache.setJSON(key, rows);

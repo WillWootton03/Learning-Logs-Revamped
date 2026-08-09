@@ -289,7 +289,7 @@ async function recordRunFromSettings(userId, boardId, quizSettingsId, { timeElap
  */
 async function listAllRuns(userId) {
   const key = cache.userKey(userId, 'runs');
-  const cached = await cache.getJSON(key);
+  const cached = await cache.getJSON(key, '/users/me/runs');
   if (cached) return cached;
   const rows = await quizRepository.findRunsByUser(userId);
   await cache.setJSON(key, rows);
@@ -305,7 +305,7 @@ async function listAllRuns(userId) {
  */
 async function listRuns(userId, boardId) {
   const key = cache.boardKey(userId, boardId, 'runs');
-  const cached = await cache.getJSON(key);
+  const cached = await cache.getJSON(key, '/boards/:boardId/quizzes');
   if (cached) return cached;
   const rows = await quizRepository.findRunsByBoard(userId, boardId);
   await cache.setJSON(key, rows);

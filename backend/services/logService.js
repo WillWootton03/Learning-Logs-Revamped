@@ -32,7 +32,7 @@ function validateContent(content) {
  */
 async function list(userId, boardId) {
   const key = cache.boardKey(userId, boardId, 'logs');
-  const cached = await cache.getJSON(key);
+  const cached = await cache.getJSON(key, '/boards/:boardId/logs');
   if (cached) return cached;
   const rows = await logRepository.findAllByBoard(userId, boardId);
   await cache.setJSON(key, rows);
