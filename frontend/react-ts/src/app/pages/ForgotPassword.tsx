@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { motion } from "motion/react";
 import { GraduationCap, MailCheck, Send } from "lucide-react";
 import { GuestOnly } from "../components/GuestOnly";
+import { SystemTheme } from "../components/SystemTheme";
 import { forgotPassword } from "../lib/api";
 
 /**
@@ -32,6 +33,7 @@ export function ForgotPassword() {
 
   return (
     <GuestOnly>
+      <SystemTheme />
       <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ fontFamily: "var(--font-sans)" }}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
