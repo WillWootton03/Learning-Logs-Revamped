@@ -28,9 +28,9 @@ export function Dashboard() {
   const { user } = useAuth();
 
   // Past sessions across every board — the activity feed on the dashboard.
+  // runsLoading starts true so the skeleton shows during the fetch.
   useEffect(() => {
     let cancelled = false;
-    setRunsLoading(true);
     listAllRuns()
       .then((rows) => {
         if (!cancelled) setRuns(rows);
