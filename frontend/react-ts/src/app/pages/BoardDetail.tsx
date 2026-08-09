@@ -19,7 +19,7 @@ import { AddConceptModal } from "../components/AddConceptModal";
 import { CSVUploadModal } from "../components/CSVUploadModal";
 import { SessionModal } from "../components/SessionModal";
 import { BackButton } from "../components/BackButton";
-import { ActivityLog, type ActivityEntry } from "../components/ActivityLog";
+import { WeeklyAccuracyChart } from "../components/WeeklyAccuracyChart";
 import { listRuns } from "../lib/api/sessions";
 import type { SessionRecord } from "../types";
 
@@ -35,7 +35,9 @@ export function BoardDetail() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [runs, setRuns] = useState<SessionRecord[]>([]);
+  // Board-scoped sessions: only runs on this board. listRuns now returns the
+  // raw createdAt so the accuracy chart can group sessions by day.
+  const [runs, setRuns] = useState<Array<SessionRecord & { createdAt: string }>>([]);
   // Starts true so the activity log shows its skeleton while the fetch runs.
   const [runsLoading, setRunsLoading] = useState(true);
   // Tracks the board whose concepts have finished loading; while it doesn't
@@ -115,18 +117,6 @@ export function BoardDetail() {
   const progress = totalCount > 0 ? Math.round((learnedCount / totalCount) * 100) : 0;
   const allLearned = totalCount > 0 && learnedCount === totalCount;
 
-  // Past sessions on this board, newest first, mapped onto the activity feed.
-  // The secondary line shows the session's settings name — the board title is
-  // redundant here since every row belongs to this board.
-  const activityEntries: ActivityEntry[] = runs.map((run) => ({
-    id: run.id,
-    boardId: run.boardId,
-    type: "session",
-    message: `${run.correctCount}/${run.conceptsStudied} correct`,
-    board: run.presetName,
-    timestamp: run.date,
-  }));
-
   return (
     <>
       <main className="max-w-7xl mx-auto px-8 py-10 flex flex-col gap-8">
@@ -187,13 +177,10 @@ export function BoardDetail() {
           </p>
         </div>
 
-        {/* activity log — past sessions on this board */}
-        <ActivityLog
-          entries={activityEntries}
-          title="Activity Log"
-          subtitle={`Sessions on ${board.title}`}
-          badge={`${runs.length} session${runs.length === 1 ? "" : "s"}`}
-          onSelect={(entry) => navigate(`/app/board/${id}/sessions/${entry.id}`)}
+        {/* weekly accuracy — board-scoped sessions folded into per-day bars */}
+        <WeeklyAccuracyChart
+          boardId={id!}
+          runs={runs}
           isLoading={runsLoading}
         />
 
