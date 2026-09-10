@@ -7,6 +7,7 @@ const MAX_PROMPT_LENGTH = 500;
 const MAX_ANSWER_LENGTH = 500;
 const MAX_HINT_LENGTH = 500;
 const MAX_TAG_LENGTH = 50;
+const MAX_ALTERNATES = 20;
 const MAX_IMPORT_ROWS = 500;
 
 /**
@@ -34,6 +35,57 @@ function validateAnswer(answer) {
  */
 function validateHint(hint) {
   return hint === null || hint === undefined || (typeof hint === 'string' && hint.trim().length <= MAX_HINT_LENGTH);
+}
+
+/**
+ * Normalize and validate an optional alternates list into a clean array of
+ * trimmed, de-duplicated strings. Accepts an array of strings or a string
+ * with alternates separated by '|'. Returns [] for null/undefined (an empty
+ * list means "no alternates" — quizzes fall back to random pool answers).
+ * @param {*} value - Alternates value from the request/import row.
+ * @param {string} [where] - Label used in error messages (e.g. "Row 3").
+ * @returns {string[]}
+ * @throws {AppError} 400 when the value isn't a string/array of strings or an
+ *   alternate is too long / there are too many.
+ */
+function cleanAlternates(value, where = '') {
+  if (value === undefined || value === null) return [];
+  const prefix = where ? `${where}: ` : '';
+  const items = typeof value === 'string'
+    ? value.split('|')
+    : Array.isArray(value) ? value : null;
+  if (items === null) {
+    throw new AppError(400, `${prefix}alternates must be an array of strings or a pipe-separated string`);
+  }
+  const seen = new Set();
+  const cleaned = [];
+  for (const item of items) {
+    // A single control char separates rows during batch CSV import; strip it
+    // so user content can never fake an extra alternate.
+    const text = typeof item === 'string' ? item.replace(/\u001f/g, '').trim() : '';
+    if (!text) continue;
+    if (text.length > MAX_ANSWER_LENGTH) {
+      throw new AppError(400, `${prefix}alternate answers cannot exceed ${MAX_ANSWER_LENGTH} characters`);
+    }
+    const key = text.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      cleaned.push(text);
+    }
+  }
+  if (cleaned.length > MAX_ALTERNATES) {
+    throw new AppError(400, `${prefix}alternates is limited to ${MAX_ALTERNATES} answers`);
+  }
+  return cleaned;
+}
+
+/**
+ * True when the alternates payload is absent (nothing to change).
+ * @param {*} value
+ * @returns {boolean}
+ */
+function alternatesUnset(value) {
+  return value === undefined || value === null;
 }
 
 /**
@@ -80,11 +132,11 @@ async function getById(userId, boardId, conceptId) {
  * Create a concept on a board the user owns.
  * @param {string} userId
  * @param {string} boardId
- * @param {{prompt: string, answer: string, hint?: string|null}} data
+ * @param {{prompt: string, answer: string, hint?: string|null, alternates?: string[]}} data
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid fields, 404 if board missing/foreign.
  */
-async function create(userId, boardId, { prompt, answer, hint = null }) {
+async function create(userId, boardId, { prompt, answer, hint = null, alternates = [] }) {
   if (!validatePrompt(prompt)) {
     throw new AppError(400, `Prompt is required (max ${MAX_PROMPT_LENGTH} characters)`);
   }
@@ -94,10 +146,12 @@ async function create(userId, boardId, { prompt, answer, hint = null }) {
   if (!validateHint(hint)) {
     throw new AppError(400, `Hint cannot exceed ${MAX_HINT_LENGTH} characters`);
   }
+  const cleanAlts = cleanAlternates(alternates);
   const concept = await conceptRepository.create(userId, boardId, {
     prompt: prompt.trim(),
     answer: answer.trim(),
     hint: hint === null || hint === undefined ? null : hint.trim(),
+    alternates: cleanAlts,
   });
   if (!concept) throw new AppError(404, 'Board not found');
   await cache.invalidateBoard(userId, boardId);
@@ -105,16 +159,16 @@ async function create(userId, boardId, { prompt, answer, hint = null }) {
 }
 
 /**
- * Update a concept's prompt, answer, and/or hint. The mastery counter is not
- * editable via this endpoint.
+ * Update a concept's prompt, answer, hint, and/or alternates. The mastery
+ * counter is not editable via this endpoint.
  * @param {string} userId
  * @param {string} boardId
  * @param {string} conceptId
- * @param {{prompt?: string, answer?: string, hint?: string|null}} changes
+ * @param {{prompt?: string, answer?: string, hint?: string|null, alternates?: string[]}} changes
  * @returns {Promise<object>}
  * @throws {AppError} 400 if nothing valid to update, 404 if concept/board missing.
  */
-async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
+async function update(userId, boardId, conceptId, { prompt, answer, hint, alternates }) {
   const changes = {};
   if (prompt !== undefined) {
     if (!validatePrompt(prompt)) {
@@ -134,8 +188,13 @@ async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
     }
     changes.hint = hint === null ? null : hint.trim();
   }
+  // An absent alternates field leaves the list untouched; an explicit array
+  // (including []) replaces it wholesale.
+  if (alternates !== undefined && alternates !== null) {
+    changes.alternates = cleanAlternates(alternates);
+  }
   if (Object.keys(changes).length === 0) {
-    throw new AppError(400, 'Provide a prompt, answer, or hint to update');
+    throw new AppError(400, 'Provide a prompt, answer, hint, or alternates to update');
   }
   const concept = await conceptRepository.update(userId, boardId, conceptId, changes);
   if (!concept) throw new AppError(404, 'Concept not found');
@@ -186,7 +245,7 @@ async function setLearned(userId, boardId, conceptId, learned) {
  * insert (tags → concepts → links).
  * @param {string} userId
  * @param {string} boardId
- * @param {*} rows - Array of { prompt, answer, hint, tags } objects.
+ * @param {*} rows - Array of { prompt, answer, hint, alternates, tags } objects.
  * @returns {Promise<Array<object>>} Created concept rows with their tag names.
  * @throws {AppError} 400 on an empty/invalid payload or any bad row, 404 if
  *   the board is missing/foreign.
@@ -206,7 +265,7 @@ async function importMany(userId, boardId, rows) {
     if (!row || typeof row !== 'object') {
       throw new AppError(400, `Row ${i + 1} is not a valid concept`);
     }
-    const { prompt, answer, hint, tags } = row;
+    const { prompt, answer, hint, alternates, tags } = row;
     if (!validatePrompt(prompt)) {
       throw new AppError(400, `Row ${i + 1}: prompt is required (max ${MAX_PROMPT_LENGTH} characters)`);
     }
@@ -235,6 +294,7 @@ async function importMany(userId, boardId, rows) {
       prompt: prompt.trim(),
       answer: answer.trim(),
       hint: hint === null || hint === undefined || hint === '' ? null : hint.trim(),
+      alternates: cleanAlternates(alternates, `Row ${i + 1}`),
       tags: tagList,
     };
   });

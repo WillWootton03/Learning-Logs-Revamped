@@ -21,12 +21,15 @@ type ConceptState = {
   /** Concepts per board, keyed by board id. */
   concepts: Record<string, Concept[]>;
   loadConcepts: (boardId: string) => Promise<void>;
-  createConcept: (boardId: string, input: { prompt: string; answer: string; tags: string[] }) => Promise<Concept>;
-  /** Persist an edit to a concept's title/answer on the backend, then update local state. */
+  createConcept: (
+    boardId: string,
+    input: { prompt: string; answer: string; hint?: string | null; alternates?: string[]; tags: string[] }
+  ) => Promise<Concept>;
+  /** Persist an edit to a concept's fields on the backend, then update local state. */
   updateConcept: (
     boardId: string,
     conceptId: string,
-    changes: { title?: string; answer?: string; hint?: string | null }
+    changes: { title?: string; answer?: string; hint?: string | null; alternates?: string[] }
   ) => Promise<void>;
   /** Persist a concept's learned status on the backend, then update local state. */
   setConceptLearned: (boardId: string, conceptId: string, learned: boolean) => Promise<void>;
@@ -136,12 +139,14 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
    * then every id is batch-linked — no per-tag round trips.
    */
   const createConcept = useCallback(
-    async (boardId: string, input: { prompt: string; answer: string; tags: string[] }) => {
+    async (boardId: string, input: { prompt: string; answer: string; hint?: string | null; alternates?: string[]; tags: string[] }) => {
       const board = boards.find((b) => b.id === boardId);
       if (!board) throw new Error("Board not found");
       const row = await apiCreateConcept(boardId, {
         prompt: input.prompt,
         answer: input.answer,
+        hint: input.hint ?? null,
+        alternates: input.alternates ?? [],
       });
       const tagNames = Array.from(new Set(input.tags.map((t) => t.trim().toLowerCase()).filter(Boolean)));
 
@@ -159,7 +164,8 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
         id: row.concept_id,
         title: row.prompt,
         answer: row.answer,
-        hint: null,
+        hint: row.hint ?? input.hint ?? null,
+        alternates: row.alternates ?? input.alternates ?? [],
         learned: row.times_answered_correctly >= board.masteryThreshold,
         tags: tagNames,
         lastReviewed: null,
@@ -190,6 +196,7 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
         title: row.prompt,
         answer: row.answer,
         hint: row.hint ?? null,
+        alternates: row.alternates ?? [],
         learned: row.times_answered_correctly >= masteryThreshold,
         tags: row.tags ?? [],
         lastReviewed: null,
@@ -205,12 +212,13 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
     async (
       boardId: string,
       conceptId: string,
-      changes: { title?: string; answer?: string; hint?: string | null }
+      changes: { title?: string; answer?: string; hint?: string | null; alternates?: string[] }
     ) => {
       const row = await apiUpdateConcept(boardId, conceptId, {
         prompt: changes.title,
         answer: changes.answer,
         ...(changes.hint !== undefined ? { hint: changes.hint } : {}),
+        ...(changes.alternates !== undefined ? { alternates: changes.alternates } : {}),
       });
       setConcepts((prev) => ({
         ...prev,
@@ -221,6 +229,7 @@ export function ConceptProvider({ children }: { children: ReactNode }) {
                 title: row.prompt,
                 answer: row.answer,
                 ...(row.hint !== undefined ? { hint: row.hint } : {}),
+                ...(row.alternates !== undefined ? { alternates: row.alternates ?? [] } : {}),
               }
             : c
         ),

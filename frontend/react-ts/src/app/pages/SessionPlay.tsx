@@ -66,6 +66,10 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   const preset = (sessionPresets[boardId] ?? []).find((p) => p.id === presetId);
   const style = preset?.style;
   const exactMatching = preset?.exactMatching ?? false;
+  // Direction of the card: false = show the question, recall the answer;
+  // true = show the answer, recall the question. Only ever comes from the
+  // saved session setting.
+  const reversed = preset?.reversed ?? false;
 
   const conceptById = useMemo(
     () => new Map((concepts[boardId] ?? []).map((c) => [c.id, c])),
@@ -126,6 +130,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
           tagIds: activePreset.tagIds ?? undefined,
           includeKnown: activePreset.includeKnown,
           matchAllTags: activePreset.matchAllTags,
+          reversed: activePreset.reversed,
         });
         if (cancelled) return;
         setQuestions(generated);
@@ -275,7 +280,10 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   function handleTFSelect(saysTrue: boolean) {
     if (phase !== "question" || !current || current.statement === undefined) return;
     const concept = conceptById.get(current.conceptId);
-    const isTrue = normalize(current.statement) === normalize(concept?.answer ?? "");
+    // Direction decides which side the statement is drawn from, so the
+    // local judgment must compare against the same side the server scores.
+    const target = reversed ? concept?.title : concept?.answer;
+    const isTrue = normalize(current.statement) === normalize(target ?? "");
     const correct = saysTrue === isTrue;
     setTfSelected(saysTrue);
     setPhase("revealed");
@@ -291,7 +299,10 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   function handleOptionSelect(option: string) {
     if (phase !== "question" || !current || current.options === undefined) return;
     const concept = conceptById.get(current.conceptId);
-    const correct = normalize(option) === normalize(concept?.answer ?? "");
+    // In a flipped session the options are questions/descriptions, so the
+    // correct pick matches the concept's prompt instead of its answer.
+    const target = reversed ? concept?.title : concept?.answer;
+    const correct = normalize(option) === normalize(target ?? "");
     setSelectedOption(option);
     setPhase("revealed");
     answersRef.current.push({ conceptId: current.conceptId, response: option });
@@ -302,11 +313,12 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
   function handleCheckInput() {
     if (phase !== "question" || !current || !writtenInput.trim()) return;
     const concept = conceptById.get(current.conceptId);
+    const target = reversed ? concept?.title ?? "" : concept?.answer ?? "";
     // Mirrors the backend's scoring rule (lenient or exact) so the reveal
     // screen agrees with what the server records.
     const correct = exactMatching
-      ? isExactMatch(concept?.answer ?? "", writtenInput.trim())
-      : isLenientMatch(concept?.answer ?? "", writtenInput.trim());
+      ? isExactMatch(target, writtenInput.trim())
+      : isLenientMatch(target, writtenInput.trim());
     setInputVerdict(correct);
     setPhase("revealed");
     answersRef.current.push({ conceptId: current.conceptId, response: writtenInput.trim() });
@@ -488,12 +500,19 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
       </div>
 
       {/* Question-type tag (display only) */}
-      {style && (
-        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-card border border-border text-foreground shadow-sm w-fit cursor-default select-none">
-          {QUIZ_STYLE_OPTIONS.find((o) => o.id === style)?.icon}
-          <span>{quizStyleLabel(style)}</span>
-        </span>
-      )}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {style && (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-card border border-border text-foreground shadow-sm w-fit cursor-default select-none">
+            {QUIZ_STYLE_OPTIONS.find((o) => o.id === style)?.icon}
+            <span>{quizStyleLabel(style)}</span>
+          </span>
+        )}
+        {reversed && (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-primary/10 border border-primary/25 text-primary shadow-sm w-fit cursor-default select-none">
+            <span>Answer first</span>
+          </span>
+        )}
+      </div>
 
       {/* Tags */}
       {concept && concept.tags.length > 0 && (
@@ -527,6 +546,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
               selected={tfSelected}
               onSelect={handleTFSelect}
               boardColor={boardColor}
+              reversed={reversed}
             />
           )}
 
@@ -537,6 +557,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
               phase={phase}
               selectedOption={selectedOption}
               onSelect={handleOptionSelect}
+              reversed={reversed}
             />
           )}
 
@@ -548,6 +569,7 @@ function QuizSession({ boardId, presetId }: { boardId: string; presetId: string 
               onInputChange={setWrittenInput}
               onCheck={handleCheckInput}
               verdict={inputVerdict}
+              reversed={reversed}
             />
           )}
 
@@ -659,6 +681,7 @@ function TrueFalseMode({
   selected,
   onSelect,
   boardColor,
+  reversed,
 }: {
   concept: Concept | undefined;
   statement: string;
@@ -666,9 +689,13 @@ function TrueFalseMode({
   selected: boolean | null;
   onSelect: (value: boolean) => void;
   boardColor: string;
+  reversed: boolean;
 }) {
   const revealed = phase === "revealed";
-  const isTrue = normalize(statement) === normalize(concept?.answer ?? "");
+  // In a flipped session the statement is a candidate *question* for the
+  // answer shown in the header card, so judge it against the prompt side.
+  const target = reversed ? concept?.title ?? "" : concept?.answer ?? "";
+  const isTrue = normalize(statement) === normalize(target);
   const userCorrect = selected !== null && selected === isTrue;
 
   return (
@@ -676,10 +703,10 @@ function TrueFalseMode({
       <div className="bg-card border border-border rounded-2xl p-6 flex flex-col gap-1 relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: boardColor }} />
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono pt-1">
-          Concept
+          {reversed ? "Answer" : "Concept"}
         </span>
         <p className="text-xl text-foreground leading-snug mt-1" style={{ fontWeight: 500 }}>
-          {concept?.title ?? "…"}
+          {reversed ? concept?.answer ?? "…" : concept?.title ?? "…"}
         </p>
       </div>
 
@@ -693,7 +720,9 @@ function TrueFalseMode({
         }`}
       >
         <span className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">
-          Is this statement true or false?
+          {reversed
+            ? "Is this the question that matches the answer?"
+            : "Is this statement true or false?"}
         </span>
         <p className="text-base text-foreground leading-relaxed">{statement}</p>
 
@@ -704,7 +733,7 @@ function TrueFalseMode({
             transition={{ duration: 0.55, ease: "easeOut" }}
             className={`text-xs font-mono mt-1 ${isTrue ? "text-emerald-400" : "text-rose-400"}`}
           >
-            {isTrue ? "This is the correct answer" : `Correct answer: ${concept?.answer}`}
+            {isTrue ? "This is the correct match" : `Correct: ${target}`}
           </motion.p>
         )}
       </div>
@@ -759,29 +788,34 @@ function MultipleChoiceMode({
   phase,
   selectedOption,
   onSelect,
+  reversed,
 }: {
   concept: Concept | undefined;
   options: string[];
   phase: Phase;
   selectedOption: string | null;
   onSelect: (option: string) => void;
+  reversed: boolean;
 }) {
   const revealed = phase === "revealed";
+  // In a flipped session the options are candidate questions, so the correct
+  // pick matches the concept's prompt instead of its answer.
+  const target = reversed ? concept?.title ?? "" : concept?.answer ?? "";
 
   return (
     <div className="flex flex-col gap-5">
       <div className="bg-card border border-border rounded-2xl p-8">
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-          Choose the correct answer
+          {reversed ? "Which question matches this answer?" : "Choose the correct answer"}
         </span>
         <p className="text-xl text-foreground leading-snug mt-2" style={{ fontWeight: 500 }}>
-          {concept?.title ?? "…"}
+          {reversed ? concept?.answer ?? "…" : concept?.title ?? "…"}
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
         {options.map((option, i) => {
-          const isCorrect = normalize(option) === normalize(concept?.answer ?? "");
+          const isCorrect = normalize(option) === normalize(target);
           const isSelected = option === selectedOption;
 
           let cls = "border-border text-foreground hover:border-primary/40 hover:bg-primary/5";
@@ -842,6 +876,7 @@ function InputAnswerMode({
   onInputChange,
   onCheck,
   verdict,
+  reversed,
 }: {
   concept: Concept | undefined;
   phase: Phase;
@@ -849,6 +884,7 @@ function InputAnswerMode({
   onInputChange: (value: string) => void;
   onCheck: () => void;
   verdict: boolean | null;
+  reversed: boolean;
 }) {
   // The parent keys this component by question index, so it remounts for
   // every new question — focus the field immediately so typing can start
@@ -862,10 +898,10 @@ function InputAnswerMode({
     <div className="flex flex-col gap-5">
       <div className="bg-card border border-border rounded-2xl p-8">
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-          Type your answer
+          {reversed ? "Type the matching question" : "Type your answer"}
         </span>
         <p className="text-xl text-foreground leading-snug mt-2" style={{ fontWeight: 500 }}>
-          {concept?.title ?? "…"}
+          {reversed ? concept?.answer ?? "…" : concept?.title ?? "…"}
         </p>
       </div>
 
@@ -881,7 +917,7 @@ function InputAnswerMode({
                 onCheck();
               }
             }}
-            placeholder="Write your answer here… (Enter to check)"
+            placeholder={reversed ? "Type the question here… (Enter to check)" : "Write your answer here… (Enter to check)"}
             rows={4}
             className="w-full px-4 py-3 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none transition-all"
             style={{ fontFamily: "var(--font-sans)" }}
@@ -914,9 +950,11 @@ function InputAnswerMode({
             </div>
             <div className="flex flex-col gap-1.5 bg-emerald-500/5 border border-emerald-500/25 rounded-xl p-4">
               <span className="text-[10px] uppercase tracking-widest text-emerald-400 font-mono">
-                Correct answer
+                {reversed ? "Correct question" : "Correct answer"}
               </span>
-              <p className="text-sm text-foreground leading-relaxed">{concept?.answer}</p>
+              <p className="text-sm text-foreground leading-relaxed">
+                {reversed ? concept?.title : concept?.answer}
+              </p>
             </div>
           </div>
 

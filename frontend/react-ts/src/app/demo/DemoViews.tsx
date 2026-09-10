@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { motion } from "motion/react";
 import {
-  ArrowLeft, BarChart2, BookOpen, CalendarDays, Check, CheckCircle2, ChevronRight, Circle,
+  ArrowLeft, ArrowLeftRight, BarChart2, BookOpen, CalendarDays, Check, CheckCircle2, ChevronRight, Circle,
   Clock, Eye, Flame, ListFilter, Pencil, Play, Plus, RotateCcw, Save, Search, SlidersHorizontal, Tag, Trash2, Type, Upload, X, XCircle,
 } from "lucide-react";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -292,6 +292,9 @@ export function DemoConceptDetailView({
   const [draftLearned, setDraftLearned] = useState(concept.learned);
   // Staged tag names for this concept (existing names + newly added ones).
   const [draftTags, setDraftTags] = useState<string[]>(concept.tagIds.map((id) => tagNameById.get(id) ?? id));
+  // Staged alternate-answer list + the input used to add one.
+  const [draftAlternates, setDraftAlternates] = useState<string[]>(concept.alternates);
+  const [altInput, setAltInput] = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -323,6 +326,8 @@ export function DemoConceptDetailView({
     setDraftHint(concept.hint ?? "");
     setDraftLearned(concept.learned);
     setDraftTags(concept.tagIds.map((id) => tagNameById.get(id) ?? id));
+    setDraftAlternates(concept.alternates);
+    setAltInput("");
     setTagInput("");
     setIsEditing(true);
   }
@@ -330,6 +335,7 @@ export function DemoConceptDetailView({
   function cancelEdit() {
     setIsEditing(false);
     setAddingTag(false);
+    setAltInput("");
     setTagInput("");
   }
 
@@ -360,6 +366,7 @@ export function DemoConceptDetailView({
       hint: draftHint.trim() === "" ? null : draftHint.trim(),
       learned: draftLearned,
       tagIds: resolveTagIds(draftTags),
+      alternates: draftAlternates.map((a) => a.trim()).filter(Boolean),
     });
     cancelEdit();
     onToast("Concept updated", `"${title}" was saved.`);
@@ -376,6 +383,16 @@ export function DemoConceptDetailView({
     if (!trimmed || stagedNames.includes(trimmed)) return;
     setDraftTags((prev) => [...prev, trimmed]);
     setTagInput("");
+  }
+
+  /** Add a staged alternate answer (deduped case-insensitively). */
+  function addAlternate(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setDraftAlternates((prev) =>
+      prev.some((a) => a.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
+    );
+    setAltInput("");
   }
 
   function handleNewTagKeyDown(e: KeyboardEvent) {
@@ -657,6 +674,84 @@ export function DemoConceptDetailView({
           )}
         </div>
       </motion.div>
+
+      {/* alternate answers — read-only unless editing */}
+      {(isEditing || concept.alternates.length > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.17 }}
+          className="flex flex-col gap-3"
+        >
+          <h2 className="text-muted-foreground/80 text-sm tracking-wide uppercase font-mono">Alternate answers</h2>
+          <div className="bg-secondary/30 border border-dashed border-border/60 rounded-xl p-4 sm:p-5">
+            {isEditing ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-[10px] text-muted-foreground font-mono">
+                  Plausible wrong answers. Multiple choice uses them when you've added at least 3 —
+                  otherwise random board answers are picked.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={altInput}
+                    onChange={(e) => setAltInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addAlternate(altInput);
+                      }
+                    }}
+                    placeholder="e.g. A function that captures its scope"
+                    className="flex-1 px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addAlternate(altInput)}
+                    disabled={!altInput.trim()}
+                    className="px-4 py-2 rounded-lg bg-primary/15 text-primary text-sm border border-primary/25 hover:bg-primary/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+                {draftAlternates.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {draftAlternates.map((alt) => (
+                      <span
+                        key={alt}
+                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono"
+                      >
+                        {alt}
+                        <button
+                          type="button"
+                          onClick={() => setDraftAlternates((prev) => prev.filter((a) => a !== alt))}
+                          aria-label={`Remove alternate: ${alt}`}
+                          className="hover:text-foreground transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground/60 font-mono">No alternate answers staged.</p>
+                )}
+              </div>
+            ) : concept.alternates.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {concept.alternates.map((alt) => (
+                  <span
+                    key={alt}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono"
+                  >
+                    {alt}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </motion.div>
+      )}
 
       {/* actions */}
       <motion.div
@@ -1082,6 +1177,12 @@ export function DemoSessionDetailView({
             active={run.includeKnown}
           />
           <SettingRow
+            icon={<ArrowLeftRight className="w-3.5 h-3.5" />}
+            label="Card direction"
+            value={run.reversed ? "Answer first" : "Question first"}
+            active={run.reversed}
+          />
+          <SettingRow
             icon={<Tag className="w-3.5 h-3.5" />}
             label="Tag filter"
             value={
@@ -1341,6 +1442,7 @@ export function DemoSettingsView({
                             ? `${preset.tagIds.length} tag${preset.tagIds.length !== 1 ? "s" : ""} (all)`
                             : `${preset.tagIds.length} tag${preset.tagIds.length !== 1 ? "s" : ""}`}
                         {preset.style === "fill_in" && preset.exactMatching ? " · exact match" : ""}
+                        {preset.reversed ? " · answer first" : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">

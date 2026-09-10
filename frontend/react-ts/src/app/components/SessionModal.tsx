@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, Check, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Check, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useConcepts } from "../context/ConceptContext";
 import { useSessions } from "../context/SessionContext";
 import { useBoard } from "../context/BoardContext";
@@ -113,7 +113,7 @@ export function SessionModal({ boardId, open, onClose, onStart }: Props) {
   }
 
   function openNew() {
-    setEditingPreset({ id: "", name: "", style: DEFAULT_STYLE, includeKnown: true, tagIds: null, matchAllTags: false, exactMatching: false });
+    setEditingPreset({ id: "", name: "", style: DEFAULT_STYLE, includeKnown: true, tagIds: null, matchAllTags: false, exactMatching: false, reversed: false });
     setView("edit");
   }
 
@@ -142,6 +142,7 @@ export function SessionModal({ boardId, open, onClose, onStart }: Props) {
         tagIds: editingPreset.tagIds ?? [],
         matchAllTags: editingPreset.matchAllTags,
         exactMatching: editingPreset.exactMatching,
+        reversed: editingPreset.reversed,
       };
       if (isNew) {
         await createSessionPreset(boardId, payload);
@@ -258,6 +259,7 @@ export function SessionModal({ boardId, open, onClose, onStart }: Props) {
                                   ? `${preset.tagIds.length} tag${preset.tagIds.length !== 1 ? "s" : ""} (all)`
                                   : `${preset.tagIds.length} tag${preset.tagIds.length !== 1 ? "s" : ""}`}
                               {preset.style === "fill_in" && preset.exactMatching ? " · exact match" : ""}
+                              {preset.reversed ? " · answer first" : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -361,6 +363,48 @@ export function SessionModal({ boardId, open, onClose, onStart }: Props) {
                           checked={editingPreset.includeKnown}
                           onChange={(v) => setEditingPreset({ ...editingPreset, includeKnown: v })}
                         />
+                      </div>
+
+                      {/* card direction */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">
+                          Card direction
+                        </label>
+                        <div className="flex flex-col gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset({ ...editingPreset, reversed: false })}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
+                              !editingPreset.reversed
+                                ? "bg-primary/15 text-primary border border-primary/30"
+                                : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+                            }`}
+                          >
+                            <ArrowLeftRight className="w-4 h-4" />
+                            <span>Question → answer displayed</span>
+                            {!editingPreset.reversed && (
+                              <span className="ml-auto text-[10px] font-mono text-primary/80">default</span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreset({ ...editingPreset, reversed: true })}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
+                              editingPreset.reversed
+                                ? "bg-primary/15 text-primary border border-primary/30"
+                                : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+                            }`}
+                          >
+                            <ArrowLeftRight className="w-4 h-4 rotate-180" />
+                            <span>Answer → question displayed</span>
+                            {editingPreset.reversed && (
+                              <span className="ml-auto text-[10px] font-mono text-primary/80">flipped</span>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground font-mono">
+                          Flipped sessions show the answer first and ask you for the matching question.
+                        </p>
                       </div>
 
                       {/* question type */}

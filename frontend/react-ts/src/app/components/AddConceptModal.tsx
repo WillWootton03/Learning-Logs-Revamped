@@ -22,6 +22,8 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
   const { boardTagPool } = useTags();
   const [title, setTitle] = useState("");
   const [answer, setAnswer] = useState("");
+  const [alternates, setAlternates] = useState<string[]>([]);
+  const [altInput, setAltInput] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +63,16 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
     if (e.key === "Backspace" && !tagInput && tags.length) setTags((prev) => prev.slice(0, -1));
   }
 
+  /** Add a single alternate answer to the list (deduped case-insensitively). */
+  function addAlternate(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setAlternates((prev) =>
+      prev.some((a) => a.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
+    );
+    setAltInput("");
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim() || !answer.trim()) return;
@@ -70,6 +82,7 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
       await createConcept(boardId, {
         prompt: title.trim(),
         answer: answer.trim(),
+        alternates,
         tags,
       });
       reset();
@@ -83,6 +96,8 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
   function reset() {
     setTitle("");
     setAnswer("");
+    setAlternates([]);
+    setAltInput("");
     setTags([]);
     setTagInput("");
     setSubmitError(null);
@@ -142,6 +157,62 @@ export function AddConceptModal({ boardId, open, onClose }: Props) {
                   className="px-4 py-2.5 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all resize-none"
                   style={{ fontFamily: "var(--font-sans)" }}
                 />
+              </div>
+
+              {/* alternate answers */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">
+                  Alternate answers <span className="text-muted-foreground/50">(optional)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={altInput}
+                    onChange={(e) => setAltInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addAlternate(altInput);
+                      }
+                    }}
+                    placeholder="e.g. A function that captures its scope"
+                    className="flex-1 px-4 py-2.5 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                    style={{ fontFamily: "var(--font-sans)" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addAlternate(altInput)}
+                    disabled={!altInput.trim()}
+                    className="px-4 py-2 rounded-lg bg-primary/15 text-primary text-sm border border-primary/25 hover:bg-primary/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+                {alternates.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {alternates.map((alt) => (
+                      <span
+                        key={alt}
+                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono"
+                      >
+                        {alt}
+                        <button
+                          type="button"
+                          onClick={() => setAlternates((prev) => prev.filter((a) => a !== alt))}
+                          aria-label={`Remove alternate: ${alt}`}
+                          className="hover:text-foreground transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    Plausible wrong answers. Multiple choice uses them when you've added at least 3 —
+                    otherwise random board answers are picked.
+                  </p>
+                )}
               </div>
 
               {/* tags */}

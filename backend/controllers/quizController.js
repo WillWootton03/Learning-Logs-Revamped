@@ -6,13 +6,14 @@ const asyncHandler = require('../middleware/asyncHandler');
  * Body: { style, tagIds?, includeKnown?, questionCount? }.
  */
 async function generateQuestions(req, res) {
-  const { style, tagIds, includeKnown, questionCount, matchAll } = req.body;
+  const { style, tagIds, includeKnown, questionCount, matchAll, reversed } = req.body;
   const questions = await quizService.generateQuestions(req.userId, req.params.boardId, {
     style,
     tagIds,
     includeKnown,
     questionCount,
     matchAll,
+    reversed,
   });
   return res.status(200).json({ questions });
 }
@@ -22,7 +23,7 @@ async function generateQuestions(req, res) {
  * Body: { style, tagIds?, includeKnown?, timeElapsedMs, answers }.
  */
 async function recordRun(req, res) {
-  const { style, tagIds, includeKnown, timeElapsedMs, answers, exactMatching } = req.body;
+  const { style, tagIds, includeKnown, timeElapsedMs, answers, exactMatching, reversed } = req.body;
   const result = await quizService.recordRun(req.userId, req.params.boardId, {
     style,
     tagIds,
@@ -30,6 +31,7 @@ async function recordRun(req, res) {
     timeElapsedMs,
     answers,
     exactMatching,
+    reversed,
   });
   return res.status(201).json(result);
 }

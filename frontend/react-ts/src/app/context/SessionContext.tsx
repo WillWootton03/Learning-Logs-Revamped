@@ -29,6 +29,7 @@ type SessionState = {
       tagIds: string[] | null;
       matchAllTags: boolean;
       exactMatching: boolean;
+      reversed?: boolean;
     }
   ) => Promise<SessionPreset>;
   /** Persist a preset's fields and sync its tag filter. */
@@ -67,6 +68,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         tagIds: string[] | null;
         matchAllTags: boolean;
         exactMatching: boolean;
+        reversed?: boolean;
       }
     ) => {
       const preset = await createQuizSettings(boardId, {
@@ -75,6 +77,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         includeKnown: input.includeKnown,
         exactMatching: input.exactMatching,
         matchAllTags: input.matchAllTags,
+        reversed: input.reversed ?? false,
         tagIds: input.tagIds ?? [],
       });
       // Both modes come back from the server (they're persisted), so the
@@ -94,6 +97,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         includeKnown: preset.includeKnown,
         exactMatching: preset.exactMatching,
         matchAllTags: preset.matchAllTags,
+        reversed: preset.reversed,
       });
       // Tag filtering is managed through the separate add/remove endpoints, so
       // diff the saved filter against the edited one.

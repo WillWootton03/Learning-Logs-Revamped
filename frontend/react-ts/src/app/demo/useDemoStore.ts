@@ -26,12 +26,12 @@ export type DemoStore = {
   createTag: (boardId: string, name: string) => DemoTag;
   createConcept: (
     boardId: string,
-    input: { title: string; answer: string; hint: string | null; learned: boolean; tagIds: string[] }
+    input: { title: string; answer: string; hint: string | null; learned: boolean; tagIds: string[]; alternates: string[] }
   ) => DemoConcept;
   updateConcept: (
     boardId: string,
     conceptId: string,
-    patch: { title?: string; answer?: string; hint?: string | null; learned?: boolean; tagIds?: string[] }
+    patch: { title?: string; answer?: string; hint?: string | null; learned?: boolean; tagIds?: string[]; alternates?: string[] }
   ) => void;
   renameTag: (tagId: string, name: string) => void;
   toggleLearned: (boardId: string, conceptId: string) => void;
@@ -84,13 +84,14 @@ export function useDemoStore(): DemoStore {
   }, []);
 
   const createConcept = useCallback(
-    (boardId: string, input: { title: string; answer: string; hint: string | null; learned: boolean; tagIds: string[] }): DemoConcept => {
+    (boardId: string, input: { title: string; answer: string; hint: string | null; learned: boolean; tagIds: string[]; alternates: string[] }): DemoConcept => {
       const concept: DemoConcept = {
         id: nid("concept"),
         boardId,
         title: input.title,
         answer: input.answer,
         hint: input.hint,
+        alternates: input.alternates,
         learned: input.learned,
         tagIds: input.tagIds,
         lastReviewed: null,
@@ -102,7 +103,7 @@ export function useDemoStore(): DemoStore {
   );
 
   const updateConcept = useCallback(
-    (boardId: string, conceptId: string, patch: { title?: string; answer?: string; hint?: string | null; learned?: boolean; tagIds?: string[] }) => {
+    (boardId: string, conceptId: string, patch: { title?: string; answer?: string; hint?: string | null; learned?: boolean; tagIds?: string[]; alternates?: string[] }) => {
       setState((prev) => ({
         ...prev,
         concepts: prev.concepts.map((c) =>

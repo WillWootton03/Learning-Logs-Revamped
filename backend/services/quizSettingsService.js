@@ -93,14 +93,14 @@ async function getById(userId, boardId, quizSettingsId) {
  * Create quiz settings, optionally linked to tags.
  * @param {string} userId
  * @param {string} boardId
- * @param {{name: string, style: string, includeKnown?: boolean, exactMatching?: boolean, matchAllTags?: boolean, tagIds?: string[]}} data
+ * @param {{name: string, style: string, includeKnown?: boolean, exactMatching?: boolean, matchAllTags?: boolean, reversed?: boolean, tagIds?: string[]}} data
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid fields, 404 if board missing.
  */
 async function create(
   userId,
   boardId,
-  { name, style, includeKnown = false, exactMatching = false, matchAllTags = false, tagIds }
+  { name, style, includeKnown = false, exactMatching = false, matchAllTags = false, reversed = false, tagIds }
 ) {
   if (!validateName(name)) {
     throw new AppError(400, `Name is required (max ${MAX_NAME_LENGTH} characters)`);
@@ -117,6 +117,9 @@ async function create(
   if (typeof matchAllTags !== 'boolean') {
     throw new AppError(400, 'matchAllTags must be a boolean');
   }
+  if (typeof reversed !== 'boolean') {
+    throw new AppError(400, 'reversed must be a boolean');
+  }
   const resolvedTagIds = await resolveTagIds(userId, boardId, tagIds);
   const setting = await quizSettingsRepository.create(userId, boardId, {
     name: name.trim(),
@@ -124,6 +127,7 @@ async function create(
     includeKnown,
     exactMatching,
     matchAllTags,
+    reversed,
   });
   if (!setting) throw new AppError(404, 'Board not found');
   if (resolvedTagIds.length > 0) {
@@ -135,16 +139,17 @@ async function create(
 }
 
 /**
- * Update quiz settings (name, style, include_known). Tag filtering is managed
- * separately through addTags/removeTags — update does not touch links.
+ * Update quiz settings (name, style, include_known, reversed). Tag filtering
+ * is managed separately through addTags/removeTags — update does not touch
+ * links.
  * @param {string} userId
  * @param {string} boardId
  * @param {string} quizSettingsId
- * @param {{name?: string, style?: string, includeKnown?: boolean, exactMatching?: boolean, matchAllTags?: boolean}} changes
+ * @param {{name?: string, style?: string, includeKnown?: boolean, exactMatching?: boolean, matchAllTags?: boolean, reversed?: boolean}} changes
  * @returns {Promise<object>}
  * @throws {AppError} 400 on invalid fields, 404 if settings missing.
  */
-async function update(userId, boardId, quizSettingsId, { name, style, includeKnown, exactMatching, matchAllTags }) {
+async function update(userId, boardId, quizSettingsId, { name, style, includeKnown, exactMatching, matchAllTags, reversed }) {
   const fields = {};
   if (name !== undefined) {
     if (!validateName(name)) {
@@ -175,6 +180,12 @@ async function update(userId, boardId, quizSettingsId, { name, style, includeKno
       throw new AppError(400, 'matchAllTags must be a boolean');
     }
     fields.matchAllTags = matchAllTags;
+  }
+  if (reversed !== undefined) {
+    if (typeof reversed !== 'boolean') {
+      throw new AppError(400, 'reversed must be a boolean');
+    }
+    fields.reversed = reversed;
   }
   let setting;
   if (Object.keys(fields).length > 0) {

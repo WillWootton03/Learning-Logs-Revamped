@@ -71,72 +71,144 @@ async function resolveTagIds(userId, boardId, tagIds) {
  * Callers already verify the pool is large enough, so no edge handling.
  * @param {Array<object>} pool - All eligible concepts.
  * @param {number} count - Number of distractors wanted.
+ * @param {string} field - Which concept field to read ('answer' or 'prompt').
  * @returns {string[]}
  */
-function pickDistractors(pool, count) {
+function pickDistractors(pool, count, field = 'answer') {
   const distractors = [];
   for (let i = 0; i < count; i += 1) {
-    distractors.push(pool[Math.floor(Math.random() * pool.length)].answer);
+    distractors.push(pool[Math.floor(Math.random() * pool.length)][field]);
   }
   return distractors;
 }
 
 /**
+ * Pick `count` random, DISTINCT items from a list. Used for alternate answers,
+ * where a duplicate wrong option in the same question would look broken.
+ * @param {string[]} list
+ * @param {number} count
+ * @returns {string[]}
+ */
+function pickDistinct(list, count) {
+  const picked = [];
+  const used = new Set();
+  while (picked.length < count) {
+    const i = Math.floor(Math.random() * list.length);
+    if (!used.has(i)) {
+      used.add(i);
+      picked.push(list[i]);
+    }
+  }
+  return picked;
+}
+
+/**
+ * The concept's alternate answers that are actually usable as multiple-choice
+ * distractors: trimmed strings, de-duplicated by normalized form, and never
+ * equal (normalized) to the real answer — that would show two identical
+ * correct-looking options.
+ * @param {object} concept
+ * @returns {string[]}
+ */
+function usableAlternates(concept) {
+  const list = Array.isArray(concept.alternates) ? concept.alternates : [];
+  const seen = new Set();
+  const out = [];
+  for (const text of list) {
+    if (typeof text !== 'string') continue;
+    const trimmed = text.trim();
+    if (!trimmed) continue;
+    const key = normalize(trimmed);
+    if (key === normalize(concept.answer)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+/**
  * Assemble the question payload for one concept in the requested style.
- * Multiple choice: 3 random distractors + the real answer, shuffled.
+ * `reversed` swaps which side of the card is shown:
+ *  - forward (false): show the prompt, the target is the answer.
+ *  - reverse (true): show the answer, the target is the prompt.
+ * Multiple choice distractors come from the concept's own alternates when at
+ * least three usable ones exist, otherwise from random pool answers (random
+ * pool prompts in reverse). True/false statements are drawn from the target
+ * side of the pool.
  * @param {string} style
  * @param {object} concept
  * @param {Array<object>} pool - All eligible concepts.
+ * @param {boolean} reversed - Direction of the card.
  * @returns {object}
  */
-function buildQuestion(style, concept, pool) {
+function buildQuestion(style, concept, pool, reversed = false) {
   const base = {
     conceptId: concept.concept_id,
     prompt: concept.prompt,
     hint: concept.hint,
+    reversed,
   };
+  // The side the user has to produce or identify.
+  const targetField = reversed ? 'prompt' : 'answer';
   if (style === 'fill_in') {
     return base;
   }
   if (style === 'multiple_choice') {
-    const distractors = pickDistractors(pool, MCQ_OPTION_COUNT - 1);
-    const options = shuffle([concept.answer, ...distractors]);
+    let distractors;
+    if (reversed) {
+      // Reverse mode asks "which prompt matches this answer?" — distractors
+      // are other concepts' prompts (alternates are answer-side only).
+      distractors = pickDistractors(pool, MCQ_OPTION_COUNT - 1, 'prompt');
+    } else {
+      const alternates = usableAlternates(concept);
+      // Provided alternates win when ≥3 usable; otherwise fall back to the
+      // board pool so options are still random (never fewer than 4 options).
+      distractors =
+        alternates.length >= MCQ_OPTION_COUNT - 1
+          ? pickDistinct(alternates, MCQ_OPTION_COUNT - 1)
+          : pickDistractors(pool, MCQ_OPTION_COUNT - 1);
+    }
+    const options = shuffle([concept[targetField], ...distractors]);
     return { ...base, options };
   }
-  // true_false: show the real answer (expected: true) or a distractor
-  // (expected: false) with 50/50 probability. The expected value is NOT sent
-  // to the client; the client echoes back the statement it displayed and the
-  // server recomputes correctness at scoring time.
-  const [distractor] = pickDistractors(pool, 1);
-  const useRealAnswer = distractor === undefined || Math.random() < 0.5;
-  const statement = useRealAnswer ? concept.answer : distractor;
+  // true_false: show the real target (expected: true) or a random distractor
+  // from the same side of the pool (expected: false) with 50/50 probability.
+  // The expected value is NOT sent to the client; the client echoes back the
+  // statement it displayed and the server recomputes correctness at scoring.
+  const [distractor] = pickDistractors(pool, 1, targetField);
+  const useReal = distractor === undefined || Math.random() < 0.5;
+  const statement = useReal ? concept[targetField] : distractor;
   return { ...base, statement };
 }
 
 /**
- * Score one submitted answer against the concept's real answer.
+ * Score one submitted answer against the concept's target side.
  * @param {string} style
- * @param {object} concept - Concept row (has .answer).
+ * @param {object} concept - Concept row (has .prompt and .answer).
  * @param {{response: string|boolean, statement?: string}} answer
- * @param {boolean} exactMatching - When true, fill-in answers must match
+ * @param {boolean} exactMatching - When true, typed answers must match
  *   exactly (normalized) — no typo tolerance.
+ * @param {boolean} reversed - When true the submitted value is compared to
+ *   the prompt instead of the answer.
  * @returns {boolean}
  */
-function scoreAnswer(style, concept, answer, exactMatching = false) {
+function scoreAnswer(style, concept, answer, exactMatching = false, reversed = false) {
+  const target = reversed ? concept.prompt : concept.answer;
   if (style === 'fill_in') {
     return exactMatching
-      ? isExactMatch(concept.answer, answer.response)
-      : isLenientMatch(concept.answer, answer.response);
+      ? isExactMatch(target, answer.response)
+      : isLenientMatch(target, answer.response);
   }
   if (style === 'multiple_choice') {
-    return normalize(answer.response) === normalize(concept.answer);
+    return normalize(answer.response) === normalize(target);
   }
   if (style === 'true_false') {
     // Accept boolean true/false or the strings 'true'/'false'.
     const response = answer.response === true || answer.response === 'true';
     // correct iff the user's true/false judgment matches whether the shown
-    // statement equals the real answer.
-    return response === (normalize(answer.statement) === normalize(concept.answer));
+    // statement equals the concept's target side.
+    return response === (normalize(answer.statement) === normalize(target));
   }
   return false;
 }
@@ -146,16 +218,19 @@ function scoreAnswer(style, concept, answer, exactMatching = false) {
  * options/statements) for the client to display; no state is kept server-side.
  * @param {string} userId
  * @param {string} boardId
- * @param {{style: string, tagIds?: string[], includeKnown?: boolean, questionCount?: number, matchAll?: boolean}} params
+ * @param {{style: string, tagIds?: string[], includeKnown?: boolean, questionCount?: number, matchAll?: boolean, reversed?: boolean}} params
  * @returns {Promise<Array<object>>}
  * @throws {AppError} 400 on invalid input, 404 if nothing eligible.
  */
-async function generateQuestions(userId, boardId, { style, tagIds, includeKnown = false, questionCount, matchAll = false }) {
+async function generateQuestions(userId, boardId, { style, tagIds, includeKnown = false, questionCount, matchAll = false, reversed = false }) {
   if (!validateStyle(style)) {
     throw new AppError(400, `style must be one of: ${QUIZ_STYLES.join(', ')}`);
   }
   if (questionCount !== undefined && (!Number.isInteger(questionCount) || questionCount < 1)) {
     throw new AppError(400, 'questionCount must be a positive integer');
+  }
+  if (typeof reversed !== 'boolean') {
+    throw new AppError(400, 'reversed must be a boolean');
   }
   const resolvedTagIds = await resolveTagIds(userId, boardId, tagIds);
   const pool = await quizRepository.findEligibleConcepts(userId, boardId, {
@@ -168,7 +243,7 @@ async function generateQuestions(userId, boardId, { style, tagIds, includeKnown 
   }
   const count = questionCount ? Math.min(questionCount, pool.length, MAX_QUESTIONS) : Math.min(pool.length, MAX_QUESTIONS);
   const selected = shuffle(pool).slice(0, count);
-  return selected.map((concept) => buildQuestion(style, concept, pool));
+  return selected.map((concept) => buildQuestion(style, concept, pool, reversed));
 }
 
 /**
@@ -183,12 +258,13 @@ async function generateQuestions(userId, boardId, { style, tagIds, includeKnown 
  *   style: string,
  *   timeElapsedMs: number,
  *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>,
- *   exactMatching?: boolean
+ *   exactMatching?: boolean,
+ *   reversed?: boolean
  * }} data
  * @returns {Promise<{run: object, results: Array<object>}>}
  * @throws {AppError} 400 on unknown concepts.
  */
-async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers, exactMatching = false }) {
+async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers, exactMatching = false, reversed = false }) {
   const conceptIds = answers.map((a) => a.conceptId);
   for (const id of conceptIds) {
     if (!isUuid(id)) {
@@ -205,13 +281,14 @@ async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedM
     const concept = conceptById.get(answer.conceptId);
     return {
       conceptId: answer.conceptId,
-      answeredCorrectly: scoreAnswer(style, concept, answer, exactMatching),
+      answeredCorrectly: scoreAnswer(style, concept, answer, exactMatching, reversed),
     };
   });
 
   const run = await quizRepository.createRun(userId, boardId, {
     quizSettingsId,
     timeElapsedMs,
+    reversed,
     results,
   });
   // A run bumps mastery counters and adds a session, so the cached concept
@@ -230,12 +307,14 @@ async function persistRun(userId, boardId, { quizSettingsId, style, timeElapsedM
  *   quizSettingsId?: string|null,
  *   style: string,
  *   timeElapsedMs: number,
- *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>
+ *   answers: Array<{conceptId: string, response: string|boolean, statement?: string}>,
+ *   exactMatching?: boolean,
+ *   reversed?: boolean
  * }} data
  * @returns {Promise<{run: object, results: Array<object>}>}
  * @throws {AppError} 400 on invalid input, 404 if settings missing.
  */
-async function recordRun(userId, boardId, { quizSettingsId = null, style, timeElapsedMs, answers, exactMatching = false }) {
+async function recordRun(userId, boardId, { quizSettingsId = null, style, timeElapsedMs, answers, exactMatching = false, reversed = false }) {
   if (!validateStyle(style)) {
     throw new AppError(400, `style must be one of: ${QUIZ_STYLES.join(', ')}`);
   }
@@ -248,17 +327,20 @@ async function recordRun(userId, boardId, { quizSettingsId = null, style, timeEl
   if (quizSettingsId !== null && !isUuid(quizSettingsId)) {
     throw new AppError(400, 'quizSettingsId must be a valid UUID');
   }
+  if (typeof reversed !== 'boolean') {
+    throw new AppError(400, 'reversed must be a boolean');
+  }
   if (quizSettingsId !== null) {
     const setting = await quizSettingsRepository.findById(userId, boardId, quizSettingsId);
     if (!setting) throw new AppError(404, 'Quiz settings not found');
   }
-  return persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers, exactMatching });
+  return persistRun(userId, boardId, { quizSettingsId, style, timeElapsedMs, answers, exactMatching, reversed });
 }
 
 /**
- * Record a quiz run from a saved setting: the setting supplies the style and
- * the run is linked to it. The setting is fetched here once and reused, so
- * persistRun does not re-validate it.
+ * Record a quiz run from a saved setting: the setting supplies the style,
+ * matching mode, and direction; the run is linked to it. The setting is
+ * fetched here once and reused, so persistRun does not re-validate it.
  * @param {string} userId
  * @param {string} boardId
  * @param {string} quizSettingsId
@@ -274,9 +356,10 @@ async function recordRunFromSettings(userId, boardId, quizSettingsId, { timeElap
     style: setting.style,
     timeElapsedMs,
     answers,
-    // The setting's persisted matching mode is authoritative — the client
-    // never gets to override how its own run is scored.
+    // The setting's persisted matching mode and direction are authoritative —
+    // the client never gets to override how its own run is scored.
     exactMatching: setting.exact_matching,
+    reversed: setting.reversed,
   });
 }
 
@@ -374,4 +457,11 @@ module.exports = {
   listRunsBySettings,
   getRunBreakdown,
   removeAll,
+  // Pure helpers exported for deterministic unit tests. They contain the
+  // quiz-building/scoring rules (alternates vs. pool distractors, reversed
+  // orientation); integration tests cover the full HTTP flow on a real DB.
+  buildQuestion,
+  scoreAnswer,
+  usableAlternates,
+  pickDistinct,
 };

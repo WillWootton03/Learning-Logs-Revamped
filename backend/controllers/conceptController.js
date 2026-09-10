@@ -14,8 +14,8 @@ async function list(req, res) {
  * POST /boards/:boardId/concepts — create a concept.
  */
 async function create(req, res) {
-  const { prompt, answer, hint } = req.body;
-  const concept = await conceptService.create(req.userId, req.params.boardId, { prompt, answer, hint });
+  const { prompt, answer, hint, alternates } = req.body;
+  const concept = await conceptService.create(req.userId, req.params.boardId, { prompt, answer, hint, alternates });
   return res.status(201).json(concept);
 }
 
@@ -29,15 +29,15 @@ async function getById(req, res) {
 
 /**
  * PUT /boards/:boardId/concepts/:conceptId — update a concept's prompt,
- * answer, and/or hint.
+ * answer, hint, and/or alternates.
  */
 async function update(req, res) {
-  const { prompt, answer, hint } = req.body;
+  const { prompt, answer, hint, alternates } = req.body;
   const concept = await conceptService.update(
     req.userId,
     req.params.boardId,
     req.params.conceptId,
-    { prompt, answer, hint }
+    { prompt, answer, hint, alternates }
   );
   return res.status(200).json(concept);
 }

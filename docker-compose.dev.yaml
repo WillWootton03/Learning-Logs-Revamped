@@ -14,10 +14,18 @@
 # Secrets (DATABASE_URL, JWT_*, SMTP_*, UPSTASH_*) come from backend/.env via
 # env_file — they are read at container start, never baked into the image.
 #
-# First-time DB setup (schema + restricted RLS app role) is a one-off against
-# your Postgres, run inside the backend container:
+# Schema migrations run automatically on start: the backend CMD chains
+# `npm run db:setup` before `node --watch`, so a new column or table on the
+# Neon dev branch lands on the next `up --build`. The schema is idempotent
+# (CREATE ... IF NOT EXISTS / ADD COLUMN IF NOT EXISTS), so re-running is safe.
+#
+# A DB error here is fatal on purpose — the API won't boot against a schema it
+# doesn't have, instead of failing later with "column ... does not exist".
+#
+# Creating the restricted RLS app role is still a one-off against a *fresh*
+# database (db:setup runs as the owner; the app connects as the role db:role
+# creates):
 #   docker compose -f docker-compose.dev.yaml exec backend npm run db:role
-#   docker compose -f docker-compose.dev.yaml exec backend npm run db:setup
 
 name: learninglogs-dev
 
@@ -78,7 +86,9 @@ services:
 # One-off shell inside a running service (e.g. to run DB setup):
 #   docker compose -f docker-compose.dev.yaml exec backend sh
 #
-# First-time DB setup against Postgres (restricted RLS app role + schema):
+# First-time DB setup on a *fresh* Postgres (creates the restricted RLS app
+# role). The schema itself is applied automatically on container start; you can
+# also force it manually:
 #   docker compose -f docker-compose.dev.yaml exec backend npm run db:role
 #   docker compose -f docker-compose.dev.yaml exec backend npm run db:setup
 #

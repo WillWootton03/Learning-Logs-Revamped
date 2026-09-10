@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS concepts (
   prompt                   TEXT NOT NULL,
   answer                   TEXT NOT NULL,
   hint                     TEXT,
+  -- Alternate answers used as distractor sources in multiple-choice quizzes.
+  -- Empty array = fall back to random answers from the board's concept pool.
+  alternates               TEXT[] NOT NULL DEFAULT '{}',
   times_answered_correctly INT NOT NULL DEFAULT 0,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -75,6 +78,9 @@ CREATE TABLE IF NOT EXISTS quiz_settings (
   include_known    BOOLEAN NOT NULL DEFAULT false,
   exact_matching   BOOLEAN NOT NULL DEFAULT false,
   match_all_tags   BOOLEAN NOT NULL DEFAULT false,
+  -- Direction of the card: false = show the prompt, recall the answer;
+  -- true = show the answer, recall the prompt.
+  reversed         BOOLEAN NOT NULL DEFAULT false,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -89,7 +95,9 @@ CREATE TABLE IF NOT EXISTS quiz_settings_tags (
 
 -- An actual quiz attempt/run. quiz_settings_id is NULL for one-off quizzes.
 -- board_id is stored directly on the run so one-off quizzes (which have no
--- quiz_settings) are still board-scoped and listable.
+-- quiz_settings) are still board-scoped and listable. `reversed` is copied
+-- from the setting at run time so history keeps its direction even if the
+-- setting is later changed or deleted.
 CREATE TABLE IF NOT EXISTS quiz (
   quiz_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   board_id         UUID NOT NULL REFERENCES boards(board_id) ON DELETE CASCADE,
@@ -97,6 +105,7 @@ CREATE TABLE IF NOT EXISTS quiz (
   questions_count  INT NOT NULL,
   time_elapsed_ms  BIGINT NOT NULL,
   correct_count    INT NOT NULL,
+  reversed         BOOLEAN NOT NULL DEFAULT false,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -143,6 +152,9 @@ ALTER TABLE boards ADD COLUMN IF NOT EXISTS subject TEXT NOT NULL DEFAULT 'Other
 ALTER TABLE boards ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '#7c6af7';
 ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS exact_matching BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS match_all_tags BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE quiz_settings ADD COLUMN IF NOT EXISTS reversed BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE quiz ADD COLUMN IF NOT EXISTS reversed BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE concepts ADD COLUMN IF NOT EXISTS alternates TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_it INT NOT NULL DEFAULT 1;

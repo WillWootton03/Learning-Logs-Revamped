@@ -12,6 +12,7 @@ type ConceptRow = {
   prompt: string;
   answer: string;
   hint?: string | null;
+  alternates?: string[] | null;
   times_answered_correctly: number;
   tags?: string[] | null;
 };
@@ -27,6 +28,7 @@ function toConcept(row: ConceptRow, masteryThreshold: number): Concept {
     title: row.prompt,
     answer: row.answer,
     hint: row.hint ?? null,
+    alternates: row.alternates ?? [],
     learned: row.times_answered_correctly >= masteryThreshold,
     tags: row.tags ?? [],
     // The list endpoint doesn't return timestamps (summary only) — the board
@@ -51,18 +53,28 @@ export async function getConcept(boardId: string, conceptId: string) {
   );
 }
 
-export function createConcept(boardId: string, data: { prompt: string; answer: string }) {
+export function createConcept(
+  boardId: string,
+  data: { prompt: string; answer: string; hint?: string | null; alternates?: string[] }
+) {
   return request<ConceptRow>(`/boards/${boardId}/concepts`, {
     method: "POST",
-    body: JSON.stringify({ prompt: data.prompt, answer: data.answer }),
+    body: JSON.stringify({
+      prompt: data.prompt,
+      answer: data.answer,
+      hint: data.hint ?? null,
+      alternates: data.alternates ?? [],
+    }),
   });
 }
 
-/** A single CSV-derived row: prompt/answer/hint strings plus a tag-name list. */
+/** A single CSV-derived row: prompt/answer/hint strings, an alternates list, plus a tag-name list. */
 export type ImportConceptRow = {
   prompt: string;
   answer: string;
   hint: string | null;
+  /** Alternate answers parsed from the CSV's alternates column. */
+  alternates: string[];
   tags: string[];
 };
 
@@ -78,11 +90,11 @@ export async function importConcepts(boardId: string, rows: ImportConceptRow[]) 
   return res.concepts;
 }
 
-/** Update a concept's prompt, answer, and/or hint. Fields not passed are left unchanged. */
+/** Update a concept's prompt, answer, hint, and/or alternates. Fields not passed are left unchanged. */
 export function updateConcept(
   boardId: string,
   conceptId: string,
-  data: { prompt?: string; answer?: string; hint?: string | null }
+  data: { prompt?: string; answer?: string; hint?: string | null; alternates?: string[] }
 ) {
   return request<ConceptRow>(`/boards/${boardId}/concepts/${conceptId}`, {
     method: "PUT",

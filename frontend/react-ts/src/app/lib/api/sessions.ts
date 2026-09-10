@@ -16,6 +16,8 @@ type RunRow = {
   /** BIGINT — pg returns it as a string, hence the string type here. */
   time_elapsed_ms: string;
   correct_count: number;
+  /** Direction of the card (true = answer shown, prompt recalled). */
+  reversed: boolean;
   created_at: string;
   settings_name: string | null;
   /** Present on the user-wide activity-log feed only. */
@@ -58,6 +60,7 @@ export async function listRuns(boardId: string) {
       timeElapsedMs,
       date: formatSessionDate(row.created_at),
       createdAt: row.created_at,
+      reversed: row.reversed,
       results: [],
     } satisfies SessionRecord & { createdAt: string };
   });
@@ -106,6 +109,8 @@ type BreakdownRunRow = {
   /** BIGINT — pg returns it as a string. */
   time_elapsed_ms: string;
   correct_count: number;
+  /** Direction of the card, copied onto the run when it was recorded. */
+  reversed: boolean;
   created_at: string;
   settings_name: string | null;
   include_known: boolean | null;
@@ -162,6 +167,7 @@ export async function getRunBreakdown(boardId: string, quizId: string): Promise<
     date: formatSessionDate(run.created_at),
     exactMatching: run.exact_matching ?? false,
     matchAllTags: run.match_all_tags ?? false,
+    reversed: run.reversed ?? false,
     results: res.questions.map((q) => ({
       conceptId: q.concept_id,
       title: q.prompt,

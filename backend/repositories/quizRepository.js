@@ -5,9 +5,9 @@ const AppError = require('../services/AppError');
 // created_at, and the linked setting's fields. The quiz table has no
 // updated_at, so the detail row's timestamp is created_at.
 const RUN_LIST_COLUMNS =
-  'q.quiz_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count, q.created_at';
+  'q.quiz_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count, q.reversed, q.created_at';
 const RUN_COLUMNS =
-  'q.quiz_id, q.board_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count, q.created_at';
+  'q.quiz_id, q.board_id, q.quiz_settings_id, q.questions_count, q.time_elapsed_ms, q.correct_count, q.reversed, q.created_at';
 
 /**
  * Fetch the concepts eligible for a quiz on a board: optionally filtered to a
@@ -21,7 +21,7 @@ const RUN_COLUMNS =
  */
 async function findEligibleConcepts(userId, boardId, { tagIds, includeKnown, matchAll = false }) {
   const result = await pool.query(
-    `SELECT DISTINCT c.concept_id, c.prompt, c.answer, c.hint
+    `SELECT DISTINCT c.concept_id, c.prompt, c.answer, c.hint, c.alternates
      FROM concepts c
      JOIN boards b ON b.board_id = c.board_id
      LEFT JOIN concept_tags ct ON ct.concept_id = c.concept_id
@@ -52,24 +52,26 @@ async function findEligibleConcepts(userId, boardId, { tagIds, includeKnown, mat
  * @param {{
  *   quizSettingsId: string|null,
  *   timeElapsedMs: number,
+ *   reversed: boolean,
  *   results: Array<{conceptId: string, answeredCorrectly: boolean}>
  * }} data
  * @returns {Promise<object>} Created quiz row (with quiz_id).
  */
-async function createRun(userId, boardId, { quizSettingsId, timeElapsedMs, results }) {
+async function createRun(userId, boardId, { quizSettingsId, timeElapsedMs, reversed, results }) {
   return pool.transaction(async (client) => {
     const quizResult = await client.query(
-      `INSERT INTO quiz (board_id, quiz_settings_id, questions_count, time_elapsed_ms, correct_count)
-       SELECT $1, $2, $3, $4, $5
+      `INSERT INTO quiz (board_id, quiz_settings_id, questions_count, time_elapsed_ms, correct_count, reversed)
+       SELECT $1, $2, $3, $4, $5, $6
        FROM boards b
-       WHERE b.board_id = $1 AND b.user_id = $6
-       RETURNING quiz_id, quiz_settings_id, questions_count, time_elapsed_ms, correct_count`,
+       WHERE b.board_id = $1 AND b.user_id = $7
+       RETURNING quiz_id, quiz_settings_id, questions_count, time_elapsed_ms, correct_count, reversed`,
       [
         boardId,
         quizSettingsId,
         results.length,
         timeElapsedMs,
         results.filter((r) => r.answeredCorrectly).length,
+        reversed,
         userId,
       ]
     );

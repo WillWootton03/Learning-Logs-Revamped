@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, BookOpen, CalendarDays, CheckCircle2, Clock, Eye, ListFilter, Tag, Type, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, BookOpen, CalendarDays, CheckCircle2, Clock, Eye, ListFilter, Tag, Type, XCircle } from "lucide-react";
 import { useBoard } from "../context/BoardContext";
 import { BackButton } from "../components/BackButton";
 import { getRunBreakdown } from "../lib/api";
@@ -158,6 +158,12 @@ export function SessionDetail() {
             label="Learned concepts"
             value={session.includeKnown ? "Included" : "Excluded"}
             active={session.includeKnown}
+          />
+          <SettingRow
+            icon={<ArrowLeftRight className="w-3.5 h-3.5" />}
+            label="Card direction"
+            value={session.reversed ? "Answer first" : "Question first"}
+            active={session.reversed ?? false}
           />
           <SettingRow
             icon={<Tag className="w-3.5 h-3.5" />}
