@@ -53,6 +53,9 @@ export function ConceptDetail() {
   // The concept's hint — like updated_at, only the detail row carries it, so
   // it lives in its own state rather than on the (summary) context concept.
   const [hintValue, setHintValue] = useState<string | null>(null);
+  // The concept's alternate answers — likewise detail-row only (the list
+  // endpoint is summary). Kept locally for display + edit seeding.
+  const [alternatesValue, setAlternatesValue] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -67,6 +70,9 @@ export function ConceptDetail() {
   const [draftAnswer, setDraftAnswer] = useState("");
   const [draftHint, setDraftHint] = useState("");
   const [draftLearned, setDraftLearned] = useState(false);
+  // Staged alternate-answer list + the input used to add one.
+  const [draftAlternates, setDraftAlternates] = useState<string[]>([]);
+  const [altInput, setAltInput] = useState("");
   // Staged tag names for this concept after add/remove/rename operations.
   const [draftTags, setDraftTags] = useState<string[]>([]);
   // Board-wide tag renames staged while editing: original name -> new name.
@@ -128,6 +134,7 @@ export function ConceptDetail() {
           setBoardTags(allBoardTags);
           setLastReviewed(detail.updated_at ?? null);
           setHintValue(detail.hint ?? null);
+          setAlternatesValue(detail.alternates ?? []);
           setLoadError(null);
         }
       } catch (err) {
@@ -164,6 +171,8 @@ export function ConceptDetail() {
     setDraftHint(hintValue ?? "");
     setDraftLearned(concept.learned);
     setDraftTags(concept.tags);
+    setDraftAlternates(alternatesValue);
+    setAltInput("");
     setPendingRenames({});
     setIsEditing(true);
   }
@@ -176,7 +185,19 @@ export function ConceptDetail() {
     setDraftHint("");
     setDraftLearned(false);
     setDraftTags([]);
+    setDraftAlternates([]);
+    setAltInput("");
     setPendingRenames({});
+  }
+
+  /** Add a staged alternate answer (deduped case-insensitively). */
+  function addAlternate(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setDraftAlternates((prev) =>
+      prev.some((a) => a.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
+    );
+    setAltInput("");
   }
 
   /**
@@ -193,6 +214,8 @@ export function ConceptDetail() {
     const titleChanged = title !== concept.title;
     const answerChanged = answer !== concept.answer;
     const hintChanged = (hint ?? "") !== (hintValue ?? "");
+    const alternatesChanged =
+      JSON.stringify(draftAlternates.map((a) => a.trim())) !== JSON.stringify(alternatesValue);
     const learnedChanged = draftLearned !== concept.learned;
 
     const renames = Object.entries(pendingRenames);
@@ -206,6 +229,7 @@ export function ConceptDetail() {
       titleChanged ||
       answerChanged ||
       hintChanged ||
+      alternatesChanged ||
       learnedChanged ||
       removedOrig.length > 0 ||
       addedTags.length > 0 ||
@@ -218,8 +242,13 @@ export function ConceptDetail() {
     setLoadError(null);
     setIsSaving(true);
     try {
-      if (titleChanged || answerChanged || hintChanged) {
-        await updateConcept(id, conceptId, { title, answer, hint });
+      if (titleChanged || answerChanged || hintChanged || alternatesChanged) {
+        await updateConcept(id, conceptId, {
+          ...(titleChanged ? { title } : {}),
+          ...(answerChanged ? { answer } : {}),
+          ...(hintChanged ? { hint } : {}),
+          ...(alternatesChanged ? { alternates: draftAlternates.map((a) => a.trim()) } : {}),
+        });
       }
       // Board-wide renames keep the tag id, so apply them before linking any
       // newly-added names that might collide with a rename target.
@@ -251,6 +280,7 @@ export function ConceptDetail() {
       const detail = await getConcept(id, conceptId);
       setLastReviewed(detail.updated_at ?? null);
       setHintValue(detail.hint ?? null);
+      setAlternatesValue(detail.alternates ?? []);
       cancelEditing();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Failed to save concept");
@@ -808,6 +838,85 @@ export function ConceptDetail() {
             )}
           </div>
         </motion.div>
+
+        {/* alternate answers — read-only unless editing */}
+        {(isEditing || alternatesValue.length > 0) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.17 }}
+            className="flex flex-col gap-3"
+          >
+            <h2 className="text-muted-foreground/80 text-sm tracking-wide uppercase font-mono">Alternate answers</h2>
+            <div className="bg-secondary/30 border border-dashed border-border/60 rounded-xl p-4 sm:p-5">
+              {isEditing ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    Plausible wrong answers. Multiple choice uses them when you've added at least 3 —
+                    otherwise random board answers are picked.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={altInput}
+                      onChange={(e) => setAltInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addAlternate(altInput);
+                        }
+                      }}
+                      placeholder="e.g. A function that captures its scope"
+                      className="flex-1 px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                      style={{ fontFamily: "var(--font-sans)" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addAlternate(altInput)}
+                      disabled={!altInput.trim()}
+                      className="px-4 py-2 rounded-lg bg-primary/15 text-primary text-sm border border-primary/25 hover:bg-primary/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {draftAlternates.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {draftAlternates.map((alt) => (
+                        <span
+                          key={alt}
+                          className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono"
+                        >
+                          {alt}
+                          <button
+                            type="button"
+                            onClick={() => setDraftAlternates((prev) => prev.filter((a) => a !== alt))}
+                            aria-label={`Remove alternate: ${alt}`}
+                            className="hover:text-foreground transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/60 font-mono">No alternate answers staged.</p>
+                  )}
+                </div>
+              ) : alternatesValue.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {alternatesValue.map((alt) => (
+                    <span
+                      key={alt}
+                      className="text-[11px] px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono"
+                    >
+                      {alt}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </motion.div>
+        )}
 
         {/* actions */}
         <motion.div

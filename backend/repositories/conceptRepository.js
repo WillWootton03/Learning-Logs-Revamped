@@ -42,7 +42,7 @@ async function findAllByBoard(userId, boardId, tagId) {
  */
 async function findById(userId, boardId, conceptId) {
   const result = await pool.query(
-    `SELECT c.concept_id, c.board_id, c.prompt, c.answer, c.hint,
+    `SELECT c.concept_id, c.board_id, c.prompt, c.answer, c.hint, c.alternates,
             c.times_answered_correctly, c.updated_at
      FROM concepts c
      JOIN boards b ON b.board_id = c.board_id
@@ -80,33 +80,33 @@ async function findManyByIds(userId, boardId, conceptIds) {
  * no row and the caller gets null.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
- * @param {{prompt: string, answer: string, hint: string|null}} data
+ * @param {{prompt: string, answer: string, hint: string|null, alternates: string[]}} data
  * @returns {Promise<object|null>} Created concept row, or null if board not owned.
  */
-async function create(userId, boardId, { prompt, answer, hint }) {
+async function create(userId, boardId, { prompt, answer, hint, alternates }) {
   const result = await pool.query(
-    `INSERT INTO concepts (board_id, prompt, answer, hint)
-     SELECT $1, $2, $3, $4
+    `INSERT INTO concepts (board_id, prompt, answer, hint, alternates)
+     SELECT $1, $2, $3, $4, $5::text[]
      FROM boards b
-     WHERE b.board_id = $1 AND b.user_id = $5
-     RETURNING concept_id, prompt, answer, times_answered_correctly`,
-    [boardId, prompt, answer, hint, userId]
+     WHERE b.board_id = $1 AND b.user_id = $6
+     RETURNING concept_id, prompt, answer, hint, alternates, times_answered_correctly`,
+    [boardId, prompt, answer, hint, alternates, userId]
   );
   return result.rows[0] || null;
 }
 
 /**
- * Update a concept's prompt, answer, and/or hint. Only provided fields
- * change; times_answered_correctly is intentionally not updatable here —
+ * Update a concept's prompt, answer, hint, and/or alternates. Only provided
+ * fields change; times_answered_correctly is intentionally not updatable here —
  * it is managed only by quiz runs. The UPDATE is joined through boards so it
  * cannot touch another user's concept.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
  * @param {string} conceptId - Concept id (UUID).
- * @param {{prompt?: string, answer?: string, hint?: string|null}} changes
+ * @param {{prompt?: string, answer?: string, hint?: string|null, alternates?: string[]}} changes
  * @returns {Promise<object|null>} Updated concept row or null.
  */
-async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
+async function update(userId, boardId, conceptId, { prompt, answer, hint, alternates }) {
   // Identity params go first ($1 = conceptId, $2 = boardId, $3 = userId) so
   // the WHERE clause positions are fixed; mutable fields follow in order.
   const values = [conceptId, boardId, userId];
@@ -127,6 +127,11 @@ async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
     values.push(hint);
     param += 1;
   }
+  if (alternates !== undefined) {
+    sets.push(`alternates = $${param}::text[]`);
+    values.push(alternates);
+    param += 1;
+  }
   if (sets.length === 0) return null;
   sets.push(`updated_at = now()`);
   const result = await pool.query(
@@ -137,7 +142,7 @@ async function update(userId, boardId, conceptId, { prompt, answer, hint }) {
        AND c.board_id = b.board_id
        AND b.board_id = $2
        AND b.user_id = $3
-     RETURNING c.concept_id, c.prompt, c.answer, c.times_answered_correctly`,
+     RETURNING c.concept_id, c.prompt, c.answer, c.hint, c.alternates, c.times_answered_correctly`,
     values
   );
   return result.rows[0] || null;
@@ -204,9 +209,9 @@ async function setLearned(userId, boardId, conceptId, learned) {
  * concept rows carry their tag names so the caller can seed local state.
  * @param {string} userId - Board owner's user id (UUID).
  * @param {string} boardId - Board id (UUID).
- * @param {Array<{prompt: string, answer: string, hint: string|null, tags: string[]}>} rows
+ * @param {Array<{prompt: string, answer: string, hint: string|null, alternates: string[], tags: string[]}>} rows
  * @returns {Promise<Array<object>>} Created concept rows (concept_id, prompt,
- *   answer, hint, tags) or null if the board isn't the user's.
+ *   answer, hint, alternates, tags) or null if the board isn't the user's.
  */
 async function importMany(userId, boardId, rows) {
   return pool.transaction(async (client) => {
@@ -240,16 +245,22 @@ async function importMany(userId, boardId, rows) {
     // 2. Concepts next: batch insert all rows. Prompt/answer are required and
     //    the INSERT is guarded by a board-ownership join, so no row returned
     //    means the board doesn't exist or isn't the user's.
+    // Alternates ride along as a parallel text[] of unit-separator (0x1f)
+    // joined strings — Postgres arrays must be rectangular, and alternate
+    // lists are variable length, so a joined scalar is the batch-safe shape.
+    // string_to_array yields '{}' for an empty string, matching the default.
     const prompts = rows.map((row) => row.prompt);
     const answers = rows.map((row) => row.answer);
     const hints = rows.map((row) => row.hint);
+    const alternates = rows.map((row) => row.alternates.join('\x1f'));
     const conceptResult = await client.query(
-      `INSERT INTO concepts (board_id, prompt, answer, hint)
-       SELECT b.board_id, input.prompt, input.answer, input.hint
-       FROM unnest($2::text[], $3::text[], $4::text[]) AS input(prompt, answer, hint)
-       JOIN boards b ON b.board_id = $1 AND b.user_id = $5
-       RETURNING concept_id, prompt, answer, hint`,
-      [boardId, prompts, answers, hints, userId]
+      `INSERT INTO concepts (board_id, prompt, answer, hint, alternates)
+       SELECT b.board_id, input.prompt, input.answer, input.hint,
+              string_to_array(input.alternates, E'\\x1f')
+       FROM unnest($2::text[], $3::text[], $4::text[], $5::text[]) AS input(prompt, answer, hint, alternates)
+       JOIN boards b ON b.board_id = $1 AND b.user_id = $6
+       RETURNING concept_id, prompt, answer, hint, alternates`,
+      [boardId, prompts, answers, hints, alternates, userId]
     );
     const concepts = conceptResult.rows;
     if (concepts.length !== rows.length) {

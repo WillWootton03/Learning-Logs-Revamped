@@ -20,12 +20,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # --- Dev: the hot-reloaded API server. Production deps only — the dev stack
-# runs `node --watch` (a Node built-in), which needs no devDependencies. ---
+# runs `node --watch` (a Node built-in), which needs no devDependencies.
+# Applies the schema before booting (same as prod) so the Neon dev branch picks
+# up new columns/tables on `up --build` without a manual db:setup step. The
+# schema is idempotent, so re-running on every start is safe. ---
 FROM base AS dev
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 COPY . .
 EXPOSE 3000
-CMD ["node", "--watch", "bin/www"]
+CMD ["sh", "-c", "npm run db:setup && node --watch bin/www"]
 
 # --- Test: full install so jest/supertest (devDependencies) are available.
 # The command chains the unit suite with the integration suite. ---

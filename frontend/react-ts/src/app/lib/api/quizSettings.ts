@@ -16,6 +16,7 @@ type SettingsRow = {
   include_known: boolean;
   exact_matching: boolean;
   match_all_tags: boolean;
+  reversed: boolean;
   tag_ids: string[];
 };
 
@@ -26,10 +27,12 @@ function toPreset(row: SettingsRow): SessionPreset {
     style: row.style,
     includeKnown: row.include_known,
     tagIds: row.tag_ids.length > 0 ? row.tag_ids : null,
-    // Both answer-matching and tag match-all modes are persisted server-side,
-    // so presets restored from the backend carry the exact modes that were set.
+    // Answer-matching, tag match-all, and direction are all persisted
+    // server-side, so presets restored from the backend carry the exact modes
+    // that were set.
     matchAllTags: row.match_all_tags,
     exactMatching: row.exact_matching,
+    reversed: row.reversed,
   };
 }
 
@@ -40,7 +43,7 @@ export async function listQuizSettings(boardId: string) {
 
 export function createQuizSettings(
   boardId: string,
-  data: { name: string; style: QuizStyle; includeKnown: boolean; exactMatching: boolean; matchAllTags: boolean; tagIds: string[] }
+  data: { name: string; style: QuizStyle; includeKnown: boolean; exactMatching: boolean; matchAllTags: boolean; reversed?: boolean; tagIds: string[] }
 ) {
   return request<SettingsRow>(`/boards/${boardId}/quiz-settings`, {
     method: "POST",
@@ -50,16 +53,17 @@ export function createQuizSettings(
       includeKnown: data.includeKnown,
       exactMatching: data.exactMatching,
       matchAllTags: data.matchAllTags,
+      reversed: data.reversed ?? false,
       tagIds: data.tagIds,
     }),
   }).then(toPreset);
 }
 
-/** Update a setting's name/style/include-known/exact-matching/match-all. Tags are managed separately. */
+/** Update a setting's name/style/include-known/exact-matching/match-all/reversed. Tags are managed separately. */
 export function updateQuizSettings(
   boardId: string,
   settingsId: string,
-  data: { name?: string; style?: QuizStyle; includeKnown?: boolean; exactMatching?: boolean; matchAllTags?: boolean }
+  data: { name?: string; style?: QuizStyle; includeKnown?: boolean; exactMatching?: boolean; matchAllTags?: boolean; reversed?: boolean }
 ) {
   return request<SettingsRow>(`/boards/${boardId}/quiz-settings/${settingsId}`, {
     method: "PUT",

@@ -152,6 +152,7 @@ export function Demo() {
       tagIds: preset.tagIds,
       matchAllTags: preset.matchAllTags,
       exactMatching: preset.exactMatching,
+      reversed: preset.reversed,
       correctCount: correct,
       conceptsStudied: runData.results.length,
       timeElapsedMs: runData.timeElapsedMs,
@@ -344,6 +345,7 @@ export function Demo() {
               hint: input.hint || null,
               learned: input.learned,
               tagIds: input.tagIds,
+              alternates: input.alternates,
             });
             showToast("Concept added", `"${input.title}" was added to the board.`);
           }}

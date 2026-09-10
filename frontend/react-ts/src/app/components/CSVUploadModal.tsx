@@ -8,6 +8,8 @@ type ParsedRow = {
   prompt: string;
   answer: string;
   hint: string | null;
+  /** Alternate answers from the optional column 4 (pipe-separated). */
+  alternates: string[];
   tags: string[];
   valid: boolean;
   error?: string;
@@ -22,7 +24,7 @@ type Props = {
 };
 
 /** Words that mark a CSV line as a header/naming row instead of concept data. */
-const HEADER_WORDS = new Set(["prompt", "answer", "hint", "tags"]);
+const HEADER_WORDS = new Set(["prompt", "answer", "hint", "alternates", "tags"]);
 
 /**
  * Split a CSV/TSV line into fields on the given delimiter, honoring
@@ -56,15 +58,34 @@ function parseLine(line: string, delimiter: "," | "\t"): string[] {
 }
 
 /**
- * Parse raw CSV/TSV text into concept rows. Column order is fixed — prompt,
- * answer, hint, then tags — but column *names* don't matter. The delimiter is
- * detected per file (tabs win over commas, so spreadsheet paste / TSV exports
- * work); the tags column is always a comma-separated list.
+ * Parse a pipe-separated alternates cell ("alt one|alt two") into a clean,
+ * de-duplicated array. Answers commonly contain commas, so pipes are the
+ * list separator — alternates never need quoting.
+ */
+function parseAlternates(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split("|")
+        .map((a) => a.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+/**
+ * Parse raw CSV/TSV text into concept rows. Two column layouts are accepted:
  *
- * Only the FIRST row is treated as a possible naming row (its cells spelling
- * out "prompt/answer/hint/tags") and skipped. Checking just the first row is
- * important: real data rows may legitimately contain the word "hint" as a hint
- * value, and they must never be dropped as "headers".
+ *  - Legacy 4 columns — prompt, answer, hint, tags (everything after the
+ *    hint counts as tags). Existing files keep importing unchanged.
+ *  - 5 columns with alternates — prompt, answer, hint, alternates, tags —
+ *    detected by a naming row containing "alternates". Alternates are
+ *    pipe-separated in their single cell.
+ *
+ * The delimiter is detected per file (tabs win over commas, so spreadsheet
+ * paste / TSV exports work). Only the FIRST row is treated as a possible
+ * naming row; data rows may legitimately contain the words "hint"/"tags" as
+ * values and must never be dropped as headers.
  */
 function parseCSV(text: string): ParsedRow[] {
   // Drop a UTF-8 BOM that editors sometimes prepend to the first cell.
@@ -73,11 +94,12 @@ function parseCSV(text: string): ParsedRow[] {
   const delimiter: "," | "\t" = lines[0]?.includes("\t") ? "\t" : ",";
 
   // The naming row is checked exactly once, on the first line only — data
-  // rows can legitimately contain "hint"/"tags" as values and must never be
-  // dropped, so the header test never runs against a data row.
-  const isHeader =
-    lines.length > 0 &&
-    parseLine(lines[0], delimiter).some((f) => HEADER_WORDS.has(f.toLowerCase()));
+  // rows can legitimately contain "hint"/"tags"/"alternates" as values and
+  // must never be dropped, so the header test never runs against a data row.
+  const headerCells =
+    lines.length > 0 ? parseLine(lines[0], delimiter).map((f) => f.toLowerCase()) : [];
+  const isHeader = headerCells.some((f) => HEADER_WORDS.has(f));
+  const hasAlternates = isHeader && headerCells.includes("alternates");
 
   for (let i = isHeader ? 1 : 0; i < lines.length; i += 1) {
     const fields = parseLine(lines[i], delimiter);
@@ -85,23 +107,36 @@ function parseCSV(text: string): ParsedRow[] {
     const prompt = fields[0] ?? "";
     const answer = fields[1] ?? "";
     const hint = fields[2] ?? "";
-    // Everything after the hint counts as tags; handle both a quoted
-    // "a,b,c" cell and plain extra columns.
-    const rawTags = fields.slice(3).join(",");
-    const tags = rawTags
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean);
+
+    let alternates: string[];
+    let tags: string[];
+    if (hasAlternates) {
+      // Column 4 is the alternates cell; everything from column 5 on is tags.
+      alternates = parseAlternates(fields[3] ?? "");
+      const rawTags = fields.slice(4).join(",");
+      tags = rawTags
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+    } else {
+      // Legacy layout: everything after the hint counts as tags.
+      alternates = [];
+      const rawTags = fields.slice(3).join(",");
+      tags = rawTags
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+    }
 
     if (!prompt) {
-      rows.push({ prompt, answer, hint: hint || null, tags, valid: false, error: "Missing prompt" });
+      rows.push({ prompt, answer, hint: hint || null, alternates, tags, valid: false, error: "Missing prompt" });
       continue;
     }
     if (!answer) {
-      rows.push({ prompt, answer, hint: hint || null, tags, valid: false, error: "Missing answer" });
+      rows.push({ prompt, answer, hint: hint || null, alternates, tags, valid: false, error: "Missing answer" });
       continue;
     }
-    rows.push({ prompt, answer, hint: hint || null, tags: [...new Set(tags)], valid: true });
+    rows.push({ prompt, answer, hint: hint || null, alternates, tags: [...new Set(tags)], valid: true });
   }
 
   return rows;
@@ -152,6 +187,7 @@ export function CSVUploadModal({ boardId, open, onClose, onImported }: Props) {
       prompt: r.prompt,
       answer: r.answer,
       hint: r.hint,
+      alternates: r.alternates,
       tags: r.tags,
     }));
     try {
@@ -177,9 +213,9 @@ export function CSVUploadModal({ boardId, open, onClose, onImported }: Props) {
 
   function downloadTemplate() {
     const csv = [
-      "prompt,answer,hint,tags",
-      "What is useEffect?,A React hook that runs side effects after render.,Pass a dependency array to control when it runs.,hooks,react,intermediate",
-      "What is Big-O notation?,Describes the upper bound of an algorithm's complexity as input grows.,,algorithms,theory,beginner",
+      "prompt,answer,hint,alternates,tags",
+      "What is useEffect?,A React hook that runs side effects after render.,Pass a dependency array to control when it runs.,A hook for data fetching|A way to store state in a component,hooks,react,intermediate",
+      "What is Big-O notation?,Describes the upper bound of an algorithm's complexity as input grows.,,hacks,algorithms,theory,beginner",
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -261,16 +297,19 @@ export function CSVUploadModal({ boardId, open, onClose, onImported }: Props) {
                       <p><span className="text-foreground">Column 1</span> — Prompt <span className="text-primary/60">(required)</span></p>
                       <p><span className="text-foreground">Column 2</span> — Answer <span className="text-primary/60">(required)</span></p>
                       <p><span className="text-foreground">Column 3</span> — Hint <span className="text-primary/60">(optional)</span></p>
-                      <p><span className="text-foreground">Column 4</span> — Tags, separated by <span className="text-primary">commas</span></p>
+                      <p><span className="text-foreground">Column 4</span> — Alternates, separated by <span className="text-primary">pipes (|)</span> <span className="text-primary/60">(optional)</span></p>
+                      <p><span className="text-foreground">Column 5</span> — Tags, separated by <span className="text-primary">commas</span></p>
                     </div>
                     <p className="text-[10px] text-muted-foreground font-mono leading-relaxed">
-                      Column names don't matter — only the order. A naming row (e.g.{" "}
-                      <span className="text-primary">prompt,answer,hint,tags</span>) is skipped automatically.
+                      Include a naming row like <span className="text-primary">prompt,answer,hint,alternates,tags</span> to use
+                      alternates. Files without it keep the old 4-column layout
+                      (prompt,answer,hint,tags) and import unchanged. When 3+ alternates
+                      are set, multiple-choice quizzes use them as the wrong options.
                     </p>
                     <div className="mt-1 p-2 rounded-lg bg-card border border-border font-mono text-[10px] text-muted-foreground">
-                      prompt,answer,hint,tags<br />
-                      What is useEffect?,A React hook...,hooks,react<br />
-                      Big-O notation,Describes complexity...,algorithms
+                      prompt,answer,hint,alternates,tags<br />
+                      What is useEffect?,A React hook that runs side effects after render.,Pass a dependency array,A hook for data fetching|A way to store state,hooks,react<br />
+                      Big-O notation,Describes complexity...,,algorithms
                     </div>
                     <button
                       onClick={downloadTemplate}
@@ -321,6 +360,15 @@ export function CSVUploadModal({ boardId, open, onClose, onImported }: Props) {
                             {row.error && <p className="text-[11px] text-rose-400 font-mono mt-0.5">{row.error}</p>}
                             {row.answer && (
                               <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{row.answer}</p>
+                            )}
+                            {row.alternates.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {row.alternates.map((alt) => (
+                                  <span key={alt} className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-mono line-clamp-1">
+                                    alt: {alt}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                             {row.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">

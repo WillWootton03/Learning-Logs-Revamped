@@ -12,14 +12,17 @@ import { request } from "./client";
 export type QuizStyle = "true_false" | "multiple_choice" | "fill_in";
 
 /** A generated question. `options` is present for multiple_choice, `statement`
- * for true_false; fill_in carries only the base fields. */
+ * for true_false; fill_in carries only the base fields. `reversed` tells the
+ * client which side of the card was shown (see SessionPlay). */
 export type QuizQuestion = {
   conceptId: string;
   prompt: string;
   hint: string | null;
-  /** multiple_choice — includes the correct answer among the options. */
+  /** Direction of the card: true = the answer was shown, the prompt recalled. */
+  reversed: boolean;
+  /** multiple_choice — includes the correct answer/option among the options. */
   options?: string[];
-  /** true_false — the statement to judge. The expected answer is NOT sent. */
+  /** true_false — the statement to judge. The expected value is NOT sent. */
   statement?: string;
 };
 
@@ -38,7 +41,8 @@ export type QuizScoredResult = {
 };
 
 /** Generate a quiz's questions for a board. `matchAllTags` flips the tag
- * filter from "any selected tag" to "every selected tag". */
+ * filter from "any selected tag" to "every selected tag"; `reversed` flips
+ * the card so the answer is shown and the prompt is recalled. */
 export async function generateQuestions(
   boardId: string,
   params: {
@@ -47,6 +51,7 @@ export async function generateQuestions(
     includeKnown?: boolean;
     questionCount?: number;
     matchAllTags?: boolean;
+    reversed?: boolean;
   }
 ): Promise<QuizQuestion[]> {
   const res = await request<{ questions: QuizQuestion[] }>(`/boards/${boardId}/quizzes/generate`, {
@@ -57,6 +62,7 @@ export async function generateQuestions(
       includeKnown: params.includeKnown ?? false,
       questionCount: params.questionCount,
       matchAll: params.matchAllTags ?? false,
+      reversed: params.reversed ?? false,
     }),
   });
   return res.questions;

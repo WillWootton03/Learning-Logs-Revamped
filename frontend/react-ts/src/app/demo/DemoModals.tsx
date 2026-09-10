@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { X, Plus, Check, ChevronRight } from "lucide-react";
+import { ArrowLeftRight, X, Plus, Check, ChevronRight } from "lucide-react";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { Toggle } from "../components/Toggle";
 import { QUIZ_STYLE_OPTIONS, quizStyleLabel } from "../lib/quizStyles";
@@ -179,7 +179,7 @@ export function DemoAddConceptModal({
   open: boolean;
   boardTags: DemoTag[];
   onClose: () => void;
-  onCreate: (input: { title: string; answer: string; hint: string; learned: boolean; tagIds: string[] }) => void;
+  onCreate: (input: { title: string; answer: string; hint: string; learned: boolean; tagIds: string[]; alternates: string[] }) => void;
 }) {
   const [title, setTitle] = useState("");
   const [answer, setAnswer] = useState("");
@@ -187,6 +187,8 @@ export function DemoAddConceptModal({
   const [learned, setLearned] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [alternates, setAlternates] = useState<string[]>([]);
+  const [altInput, setAltInput] = useState("");
 
   const query = tagInput.trim().toLowerCase();
   const matchingTags = query ? boardTags.filter((t) => t.name.toLowerCase().includes(query)) : boardTags;
@@ -207,6 +209,16 @@ export function DemoAddConceptModal({
     }
   }
 
+  /** Add a single alternate answer to the list (deduped case-insensitively). */
+  function addAlternate(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setAlternates((prev) =>
+      prev.some((a) => a.toLowerCase() === trimmed.toLowerCase()) ? prev : [...prev, trimmed]
+    );
+    setAltInput("");
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim() || !answer.trim()) return;
@@ -216,6 +228,7 @@ export function DemoAddConceptModal({
       hint: hint.trim() || "",
       learned,
       tagIds,
+      alternates,
     });
     setTitle("");
     setAnswer("");
@@ -223,6 +236,8 @@ export function DemoAddConceptModal({
     setLearned(false);
     setTagInput("");
     setTagIds([]);
+    setAlternates([]);
+    setAltInput("");
     onClose();
   }
 
@@ -240,6 +255,62 @@ export function DemoAddConceptModal({
         <div className="flex flex-col gap-1.5">
           {fieldLabel("Hint (optional)")}
           <TextInput value={hint} onChange={(e) => setHint(e.target.value)} placeholder="A small nudge to jog your memory…" />
+        </div>
+
+        {/* alternate answers */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">
+            Alternate answers <span className="text-muted-foreground/50">(optional)</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={altInput}
+              onChange={(e) => setAltInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addAlternate(altInput);
+                }
+              }}
+              placeholder="e.g. A function that captures its scope"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+              style={{ fontFamily: "var(--font-sans)" }}
+            />
+            <button
+              type="button"
+              onClick={() => addAlternate(altInput)}
+              disabled={!altInput.trim()}
+              className="px-4 py-2 rounded-lg bg-primary/15 text-primary text-sm border border-primary/25 hover:bg-primary/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            >
+              Add
+            </button>
+          </div>
+          {alternates.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {alternates.map((alt) => (
+                <span
+                  key={alt}
+                  className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono"
+                >
+                  {alt}
+                  <button
+                    type="button"
+                    onClick={() => setAlternates((prev) => prev.filter((a) => a !== alt))}
+                    aria-label={`Remove alternate: ${alt}`}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground font-mono">
+              Plausible wrong answers. Multiple choice uses them when you've added at least 3 —
+              otherwise random board answers are picked.
+            </p>
+          )}
         </div>
 
         {/* tags */}
@@ -408,6 +479,7 @@ export function DemoNewSettingModal({
   const [tagIds, setTagIds] = useState<string[] | null>(initial?.tagIds ?? null);
   const [matchAllTags, setMatchAllTags] = useState(initial?.matchAllTags ?? false);
   const [exactMatching, setExactMatching] = useState(initial?.exactMatching ?? false);
+  const [reversed, setReversed] = useState(initial?.reversed ?? false);
 
   const selectedNames = tagIds?.map((id) => boardTags.find((t) => t.id === id)?.name).filter((n): n is string => Boolean(n)) ?? [];
 
@@ -436,6 +508,7 @@ export function DemoNewSettingModal({
       tagIds,
       matchAllTags,
       exactMatching,
+      reversed,
     });
     onClose();
   }
@@ -454,6 +527,46 @@ export function DemoNewSettingModal({
             <p className="text-[11px] text-muted-foreground font-mono mt-0.5">Show concepts you've already marked as learned</p>
           </div>
           <Toggle checked={includeKnown} onChange={setIncludeKnown} />
+        </div>
+
+        {/* card direction */}
+        <div className="flex flex-col gap-2">
+          {fieldLabel("Card direction")}
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => setReversed(false)}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
+                !reversed
+                  ? "bg-primary/15 text-primary border border-primary/30"
+                  : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+              }`}
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              <span>Question → recall the answer</span>
+              {!reversed && (
+                <span className="ml-auto text-[10px] font-mono text-primary/80">default</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setReversed(true)}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
+                reversed
+                  ? "bg-primary/15 text-primary border border-primary/30"
+                  : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+              }`}
+            >
+              <ArrowLeftRight className="w-4 h-4 rotate-180" />
+              <span>Answer → recall the question</span>
+              {reversed && (
+                <span className="ml-auto text-[10px] font-mono text-primary/80">flipped</span>
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground font-mono">
+            Flipped sessions show the answer first and ask you for the matching question.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -642,6 +755,7 @@ export function DemoStartSessionModal({
                     ? "all tags"
                     : `${preset.tagIds.length} tag${preset.tagIds.length !== 1 ? "s" : ""}`}
                   {preset.style === "fill_in" && preset.exactMatching ? " · exact match" : ""}
+                  {preset.reversed ? " · answer first" : ""}
                 </p>
               </div>
               <button

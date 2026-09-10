@@ -26,6 +26,12 @@ export type Concept = {
   answer: string;
   /** Optional hint shown on the detail page and revealable during a session. */
   hint: string | null;
+  /**
+   * Alternate answers used as distractor sources in multiple-choice quizzes.
+   * When at least three usable alternates exist they replace random pool
+   * answers as the wrong options.
+   */
+  alternates: string[];
   learned: boolean;
   tags: string[];
   lastReviewed: string | null;
@@ -51,6 +57,12 @@ export type SessionPreset = {
    * tolerance. Persisted on the setting and read back into presets.
    */
   exactMatching: boolean;
+  /**
+   * Direction of the card. false (default) = show the question/description
+   * and recall the answer; true = show the answer and recall the question.
+   * Set in session settings and persisted on the setting.
+   */
+  reversed: boolean;
 };
 
 export type ConceptResult = {
@@ -70,6 +82,8 @@ export type SessionRecord = {
   /** Raw elapsed time in ms — used to compute totals without parsing the label. */
   timeElapsedMs: number;
   date: string;
+  /** Direction of the card (show answer instead of the question). */
+  reversed?: boolean;
   results: ConceptResult[];
 };
 

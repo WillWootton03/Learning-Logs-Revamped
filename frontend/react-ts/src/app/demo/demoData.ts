@@ -31,6 +31,12 @@ export type DemoConcept = {
   title: string;
   answer: string;
   hint: string | null;
+  /**
+   * Alternate answers used as distractor sources in multiple-choice quizzes.
+   * When at least three usable alternates exist they replace random pool
+   * answers as the wrong options.
+   */
+  alternates: string[];
   learned: boolean;
   tagIds: string[];
   lastReviewed: string | null;
@@ -45,6 +51,12 @@ export type DemoPreset = {
   tagIds: string[] | null;
   matchAllTags: boolean;
   exactMatching: boolean;
+  /**
+   * Direction of the card. false (default) = show the question/description
+   * and recall the answer; true = show the answer and recall the question.
+   * Set in session settings and persisted on the setting.
+   */
+  reversed: boolean;
 };
 
 export type DemoRunResult = {
@@ -61,6 +73,8 @@ export type DemoRun = {
   tagIds: string[] | null;
   matchAllTags: boolean;
   exactMatching: boolean;
+  /** Direction of the card (show answer instead of the question). */
+  reversed: boolean;
   correctCount: number;
   conceptsStudied: number;
   /** Raw elapsed time in ms — used to compute totals without parsing a label. */
@@ -79,7 +93,7 @@ export type DemoState = {
   runs: DemoRun[];
 };
 
-export const DEMO_STORAGE_KEY = "learninglogs-demo-v2";
+export const DEMO_STORAGE_KEY = "learninglogs-demo-v3";
 
 let idCounter = 0;
 function nid(prefix: string): string {
@@ -118,26 +132,117 @@ function makeState(): DemoState {
     learned: boolean,
     tagIds: string[],
     hint: string | null = null,
-    reviewedDaysAgo: number | null = null
+    reviewedDaysAgo: number | null = null,
+    alternates: string[] = []
   ): DemoConcept => ({
     id: nid("concept"),
     boardId,
     title,
     answer,
     hint,
+    alternates,
     learned,
     tagIds,
     lastReviewed: reviewedDaysAgo === null ? null : daysAgo(reviewedDaysAgo, 18),
   });
 
+  // Several concepts carry plausible-but-wrong "alternate answers" (wrong
+  // options for multiple-choice quizzes). A forward multiple-choice setting
+  // ("Quick review") draws distractors from them when a concept has at least
+  // 3 — e.g. "What is a string?" only has 2, so it still falls back to random
+  // board answers; the rest have none. The reversed MC setting
+  // ("Answer-first drill") never uses alternates — its options come from
+  // other concepts' prompts.
   const concepts: DemoConcept[] = [
-    concept("What is a variable?", "A named container that stores a value in memory.", true, [tagVariables, tagDataTypes], "Think of it as a labeled box.", 0),
-    concept("What does a function do?", "A reusable block of code that performs a task and can return a value.", true, [tagFunctions], "It packages work so you can call it by name.", 1),
-    concept("What is a loop?", "A construct that repeats a block of code while a condition holds.", true, [tagControlFlow], "Repeats until the condition is false.", 2),
-    concept("What is an array?", "An ordered collection of items, accessible by index.", true, [tagArrays, tagDataTypes], "Zero-based index — first item is [0].", 3),
-    concept("What is a boolean?", "A data type with exactly two values: true and false.", true, [tagDataTypes], "The basis of all conditionals.", 4),
-    concept("What is an if statement?", "Runs a block of code only if a condition evaluates to true.", true, [tagControlFlow], "Branches the program.", 5),
-    concept("What is a string?", "A sequence of characters used to represent text.", false, [tagDataTypes], "Usually quoted: \"hello\".", 6),
+    concept(
+      "What is a variable?",
+      "A named container that stores a value in memory.",
+      true,
+      [tagVariables, tagDataTypes],
+      "Think of it as a labeled box.",
+      0,
+      [
+        "A type that can change at runtime",
+        "A fixed set of values",
+        "A reserved keyword that names a function",
+      ]
+    ),
+    concept(
+      "What does a function do?",
+      "A reusable block of code that performs a task and can return a value.",
+      true,
+      [tagFunctions],
+      "It packages work so you can call it by name.",
+      1,
+      [
+        "A value that is stored once and reused everywhere",
+        "A condition that the program checks once",
+        "A loop that runs a fixed number of times",
+      ]
+    ),
+    concept(
+      "What is a loop?",
+      "A construct that repeats a block of code while a condition holds.",
+      true,
+      [tagControlFlow],
+      "Repeats until the condition is false.",
+      2,
+      [
+        "A block of code that runs exactly once",
+        "A way to store several values by index",
+        "A function that calls itself until it stops",
+      ]
+    ),
+    concept(
+      "What is an array?",
+      "An ordered collection of items, accessible by index.",
+      true,
+      [tagArrays, tagDataTypes],
+      "Zero-based index — first item is [0].",
+      3,
+      [
+        "A set of unique values with no ordering",
+        "A single value that changes as the program runs",
+        "A container that maps keys to values",
+      ]
+    ),
+    concept(
+      "What is a boolean?",
+      "A data type with exactly two values: true and false.",
+      true,
+      [tagDataTypes],
+      "The basis of all conditionals.",
+      4,
+      [
+        "A data type that stores any whole number",
+        "A piece of text surrounded by quotes",
+        "A number with a decimal point",
+      ]
+    ),
+    concept(
+      "What is an if statement?",
+      "Runs a block of code only if a condition evaluates to true.",
+      true,
+      [tagControlFlow],
+      "Branches the program.",
+      5,
+      [
+        "Runs a block of code at least once, then checks",
+        "Repeats a block while a condition stays true",
+        "Exits the program when a condition is false",
+      ]
+    ),
+    concept(
+      "What is a string?",
+      "A sequence of characters used to represent text.",
+      false,
+      [tagDataTypes],
+      "Usually quoted: \"hello\".",
+      6,
+      // Only 2 alternates — below the multiple-choice threshold of 3, so this
+      // concept's distractors still come from the random board pool.
+      ["A whole number with no fractional part", "A collection of key-value pairs"]
+    ),
     concept("What is a function parameter?", "A named input a function receives when it is called.", false, [tagFunctions], "Local to the function's body."),
     concept("What is scope?", "The region of a program where a variable is accessible.", false, [tagVariables], "Global vs function vs block scope."),
     concept("What is an object?", "A collection of key-value pairs.", false, [tagDataTypes], "Groups related data together."),
@@ -155,6 +260,22 @@ function makeState(): DemoState {
       tagIds: null,
       matchAllTags: false,
       exactMatching: false,
+      // Forward: shows the prompt, recalls the answer. Multiple choice draws
+      // its wrong options from each concept's alternate answers.
+      reversed: false,
+    },
+    {
+      id: nid("preset"),
+      boardId,
+      name: "Answer-first drill",
+      style: "multiple_choice",
+      includeKnown: false,
+      tagIds: null,
+      matchAllTags: false,
+      exactMatching: false,
+      // Reversed: shows the answer, recalls the matching question. Wrong
+      // options come from other concepts' prompts (alternates are unused).
+      reversed: true,
     },
     {
       id: nid("preset"),
@@ -165,6 +286,7 @@ function makeState(): DemoState {
       tagIds: null,
       matchAllTags: false,
       exactMatching: false,
+      reversed: false,
     },
     {
       id: nid("preset"),
@@ -175,20 +297,23 @@ function makeState(): DemoState {
       tagIds: [tagDataTypes],
       matchAllTags: false,
       exactMatching: true,
+      reversed: false,
     },
   ];
 
   // Seed a week of sessions so the accuracy chart has bars to show. Each run
   // carries per-concept results so its detail view can render a breakdown,
-  // plus a snapshot of the settings it was played with.
+  // plus a snapshot of the settings it was played with. Both multiple-choice
+  // directions appear: "Quick review" (forward, alternate-answer options) and
+  // "Answer-first drill" (reversed, prompt matching).
   const seededRuns: [number, number, DemoRun["style"], boolean, string, number][] = [
     [5, 5, "multiple_choice", true, "Quick review", 6],
     [3, 5, "true_false", true, "Fundamentals drill", 5],
     [4, 5, "multiple_choice", false, "Quick review", 4],
     [6, 8, "fill_in", false, "Typing practice", 3],
     [5, 6, "true_false", true, "Fundamentals drill", 2],
-    [7, 8, "multiple_choice", false, "Quick review", 1],
-    [4, 5, "multiple_choice", false, "Quick review", 0],
+    [7, 8, "multiple_choice", false, "Answer-first drill", 1],
+    [4, 5, "multiple_choice", false, "Answer-first drill", 0],
   ];
   const presetByName = new Map(presets.map((p) => [p.name, p]));
   const runs: DemoRun[] = seededRuns.map(([correct, studied, style, includeKnown, presetName, ago]) => {
@@ -207,6 +332,8 @@ function makeState(): DemoState {
       tagIds: preset?.tagIds ?? null,
       matchAllTags: preset?.matchAllTags ?? false,
       exactMatching: preset?.exactMatching ?? false,
+      // Snapshot of the direction it was played with (matches the named preset).
+      reversed: preset?.reversed ?? false,
       correctCount: correct,
       conceptsStudied: studied,
       timeElapsedMs: studied * 30_000 + Math.floor(Math.random() * 90_000),
@@ -240,7 +367,26 @@ export function loadDemoState(): DemoState {
     const raw = window.localStorage.getItem(DEMO_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DemoState;
-      if (parsed && Array.isArray(parsed.boards)) return parsed;
+      if (parsed && Array.isArray(parsed.boards)) {
+        // Defensive normalize for anything missing `alternates`/`reversed`
+        // (e.g. a partially-written save). The v3 storage key already forces
+        // one fresh seed, so this only guards against incomplete writes.
+        return {
+          ...parsed,
+          concepts: (parsed.concepts ?? []).map((c) => ({
+            ...c,
+            alternates: Array.isArray(c.alternates) ? c.alternates : [],
+          })),
+          presets: (parsed.presets ?? []).map((p) => ({
+            ...p,
+            reversed: typeof p.reversed === "boolean" ? p.reversed : false,
+          })),
+          runs: (parsed.runs ?? []).map((r) => ({
+            ...r,
+            reversed: typeof r.reversed === "boolean" ? r.reversed : false,
+          })),
+        };
+      }
     }
   } catch {
     // Corrupt or unavailable storage — fall through to a fresh seed.
